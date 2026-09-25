@@ -1,0 +1,31 @@
+name: Bootstrap validation
+on:
+  push:
+    branches: [main, feat/fl-002-monorepo-bootstrap]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  api:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned uv
+        run: python -m pip install uv==0.12.19
+      - name: Install locked application and development dependencies
+        run: uv sync --locked
+      - name: Lint
+        run: uv run --locked ruff check .
+      - name: Format
+        run: uv run --locked ruff format --check .
+      - name: Type check
+        run: uv run --locked mypy src tests
+      - name: Test
+        run: uv run --locked pytest

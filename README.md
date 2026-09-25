@@ -3,7 +3,7 @@
 FleetLink is a planned production-grade Commerce + Logistics Super App connecting customers, merchants, riders, and administrators through one user identity with multiple roles.
 
 ## Current status
-FL-001: Repository Engineering Foundation. This repository currently contains authoritative engineering documentation and ignore rules only. There is no running application, database schema, authentication service, or deployment pipeline yet.
+FL-002: Monorepo Bootstrap, based on accepted FL-001 commit 6c4f4c9ef1d7c15eb1306563e4e6a727b1e568e7. The API implements only /health and /ready plus OpenAPI metadata. The Flutter foundation contains a running screen and Material 3 themes. There is no product functionality, database schema, external infrastructure or deployment. Flutter tooling was unavailable: native runner generation, dependency lock resolution, analyze and widget validation remain unverified (see apps/mobile/README.md).
 
 ## Product and architecture
 Anonymous visitors can browse the public marketplace. Authenticated users can access authorized customer, merchant, rider, and administrator experiences without separate accounts per role.
@@ -13,7 +13,7 @@ The backend starts as a modular monolith with explicit bounded contexts, Clean A
 - Mobile: Flutter, Dart, Material 3, Riverpod, GoRouter, Freezed, Dio, Hive, Flutter Secure Storage, Firebase Messaging, Google Maps, WebSockets, background services, and offline-first synchronization.
 - Backend: Python, FastAPI, PostgreSQL with PostGIS, SQLAlchemy, Alembic, Redis, RabbitMQ, Celery, REST, WebSockets, OAuth2/OIDC, and JWT.
 - Infrastructure: Docker, AWS, Cloudflare, object storage, GitHub Actions, and Kubernetes-ready deployment boundaries. Kubernetes is not an initial implementation requirement.
-Versions, package choices, providers, and deployment topology must be validated and pinned during implementation; this list does not claim that dependencies are installed.
+This is the long-term technology direction. Only bootstrap dependencies listed in apps/api/pyproject.toml and apps/mobile/pubspec.yaml are introduced now. Backend transitive versions are pinned in apps/api/uv.lock; providers and deployment topology remain future decisions.
 
 ## Documentation
 - [Agent instructions](AGENTS.md)
@@ -28,7 +28,19 @@ Versions, package choices, providers, and deployment topology must be validated 
 - [Architectural decision records](docs/ADR/README.md)
 
 ## Repository conventions
-The current structure contains AGENTS.md, README.md, .gitignore, the eight subject documents above, and docs/ADR/README.md. Application directories will be introduced by later scoped tasks, not FL-001.
+```text
+apps/api/             FastAPI src layout, technical core, tests and uv.lock
+apps/mobile/          Flutter source, widget tests and minimal web runner
+apps/admin/           Future admin purpose; framework undecided
+services/worker/      Future background execution boundary
+services/realtime/    Conditional future realtime separation
+packages/contracts/  Future versioned contracts
+packages/shared/     Genuinely shared technical primitives only
+infrastructure/      Docker, Kubernetes, Terraform, monitoring placeholders
+tests/               Future E2E, performance and security suites
+docs/                Engineering specification and ADR process
+```
+Directory READMEs explain ownership; a placeholder does not mean an implementation exists.
 Use UUID identifiers, UTC internally, explicit types, bounded-context ownership, and consistent API contracts. Do not commit secrets or generated build output. Lockfiles for deployable applications must be committed when those applications exist.
 
 ## Planned development workflow
@@ -39,4 +51,49 @@ Use UUID identifiers, UTC internally, explicit types, bounded-context ownership,
 5. Run relevant checks, review security and compatibility impact, and open a pull request.
 6. Merge after review and required checks; deploy through an auditable pipeline once established.
 
-No setup, build, or test commands are advertised as working before tooling exists. See TESTING.md for planned validation gates. Local engineering decisions do not establish launch readiness or regulatory approval.
+## Prerequisites and backend setup
+Install Python 3.12 and uv 0.12.19 (for example, `python -m pip install uv==0.12.19`). GNU Make is optional. No Docker, database or broker is required.
+From the repository root:
+
+```sh
+uv sync --project apps/api --locked
+uv run --project apps/api --locked uvicorn fleetlink.main:create_app --factory --no-access-log
+```
+
+The server binds to loopback port 8000 by default. Check `http://127.0.0.1:8000/health`, `/ready` and `/openapi.json`. This local development listener is not a production ingress; production TLS remains required.
+Environment settings use FLEETLINK_ENVIRONMENT and FLEETLINK_LOG_LEVEL. Defaults run locally without an environment file. To use optional root `.env` overrides, copy `.env.example` to `.env`, then add `--env-file .env` to `uv run`. No credentials are needed.
+
+## Backend validation
+From the repository root:
+
+```sh
+uv run --project apps/api --locked pytest apps/api/tests
+uv run --project apps/api --locked ruff check apps/api
+uv run --project apps/api --locked ruff format --check apps/api
+```
+
+Type checking uses the API's configuration (change directory first):
+
+```sh
+cd apps/api
+uv run --locked mypy src tests
+```
+
+`make help` lists equivalent root targets. The minimal GitHub Actions workflow runs locked backend install, lint/format, type checks and tests only; it does not deploy anything.
+See [API configuration and dependency rationale](apps/api/README.md), including the warning-free httpx2 test client and why pytest-asyncio is unnecessary.
+
+## Mobile setup and validation
+Install a current stable [Flutter SDK](https://docs.flutter.dev/install/archive). From the repository root:
+
+```sh
+cd apps/mobile
+flutter pub get
+flutter analyze
+flutter test
+flutter run -d chrome
+```
+
+Flutter was unavailable during bootstrap. These checks are not claimed to pass; the generated pubspec.lock and Android/iOS runners require the SDK and must be reviewed/committed before native development. [Mobile setup](apps/mobile/README.md) contains exact generation commands, placeholder namespace, and remaining validation. No real corporate domain or release identifiers have been selected.
+Riverpod and GoRouter have documented composition boundaries but no unused dependency installations. Admin framework selection remains a future ADR. No new significant architecture outside the approved direction is adopted.
+
+See [testing standards](docs/TESTING.md) for future gates. Local bootstrap validation does not establish launch readiness.

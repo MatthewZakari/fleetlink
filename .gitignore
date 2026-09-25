@@ -63,3 +63,13 @@ Thumbs.db
 !*.tfvars.example
 
 # Application dependency lockfiles are intentionally tracked.
+
+# Flutter local/generated artifacts
+**/android/.kotlin/
+**/android/captures/
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/.last_build_id
+**/ios/Runner/GeneratedPluginRegistrant.*
+**/macos/Flutter/GeneratedPluginRegistrant.swift
+**/*.iml

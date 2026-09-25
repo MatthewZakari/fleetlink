@@ -8,7 +8,7 @@ Avoid speculative abstractions; inspect existing code first. Dependency addition
 ## Backend direction
 Python/FastAPI handlers should validate/map transport, call application use cases and map outcomes. Domain code must not depend on HTTP or ORM models. SQLAlchemy repositories implement typed ports; Alembic changes are reviewed separately from application behavior.
 Use explicit transaction boundaries and dependency injection. Avoid blocking I/O inside async handlers; choose appropriate async adapters or bounded worker execution. Bound timeouts and retries, propagate cancellation and release resources.
-Adopt formatter, linter and static type-checking configuration in a later tooling task; record actual commands in README.md when available.
+FL-002 configures Ruff formatting/lint and strict mypy for the backend; use the commands in README.md. Flutter analyzer and widget tests require an available SDK; do not claim unexecuted checks passed.
 
 ## Mobile direction
 Use Dart analysis and formatting, immutable Freezed models, Riverpod composition/state, and GoRouter navigation consistent with authorized context. UI route guards improve experience but never replace backend authorization.
