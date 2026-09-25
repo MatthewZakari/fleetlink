@@ -1,0 +1,65 @@
+# Local secrets; keep sanitized templates
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+**/key.properties
+**/google-services.json
+**/GoogleService-Info.plist
+
+# Python environments, caches and build outputs
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Dart and Flutter generated output
+.dart_tool/
+.pub-cache/
+.flutter-plugins
+.flutter-plugins-dependencies
+**/flutter/ephemeral/
+**/ios/Pods/
+**/macos/Pods/
+**/.gradle/
+**/local.properties
+
+# Local databases, logs and diagnostics
+*.log
+*.sqlite
+*.sqlite3
+coverage/
+test-results/
+
+# Editor and OS local files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Local infrastructure state
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# Application dependency lockfiles are intentionally tracked.
