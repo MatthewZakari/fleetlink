@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-All phases below are planned. FL-001 produces documentation only; phase completion must be demonstrated, never inferred from this roadmap. Security, testing and observability apply throughout.
+The phases below organize planned delivery. FL-001 established documentation; FL-002 adds the technical bootstrap and backend tooling, with Flutter validation limitations documented in the root README. Phase 0 is not complete merely because these tasks exist; phase completion must be demonstrated. Security, testing and observability apply throughout.
 
 | Phase | Scope | Exit evidence |
 | --- | --- | --- |

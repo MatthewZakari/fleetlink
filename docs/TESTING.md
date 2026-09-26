@@ -1,8 +1,8 @@
 # Testing strategy
 
 ## Evidence and scope
-Testing is mandatory for new behavior. FL-001 has no application code or runnable test suite; validate document structure, relative links, scope and consistency only. Do not describe planned checks as completed.
-Future tooling tasks must establish reproducible commands and fixtures. Record command, environment, result and important limitations for executed checks. Failed or unavailable checks remain visible.
+Testing is mandatory for new behavior. FL-001 was documentation-only. FL-002 adds infrastructure-free API tests in apps/api/tests and Flutter widget tests in apps/mobile/test; see the root README for commands and mobile tooling limitations. Do not describe planned checks as completed.
+Bootstrap tooling establishes reproducible backend commands; future tasks must extend fixtures and validation for their behavior. Record command, environment, result and important limitations for executed checks. Failed or unavailable checks remain visible.
 
 ## Test layers
 | Layer | Required coverage |

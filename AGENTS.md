@@ -1,7 +1,7 @@
 # FleetLink agent instructions
 
 ## Scope and authority
-FleetLink is production commerce and logistics software. FL-001 establishes the engineering specification only: no application scaffolding, database tables, authentication, marketplace, payments, or logistics implementation.
+FleetLink is production commerce and logistics software. FL-001 established the engineering specification. FL-002 authorizes only the monorepo bootstrap, technical API endpoints, minimal Flutter shell and developer tooling. No database tables, authentication, marketplace, payments or logistics implementation is authorized.
 The accepted technology and architecture direction is documented in docs/ARCHITECTURE.md. Planned capabilities are not implemented capabilities.
 Read this file before making any change, then README.md and the relevant documents under docs/. Inspect any more specific AGENTS.md instructions in the area being changed.
 

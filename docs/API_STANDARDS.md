@@ -41,3 +41,6 @@ Payment webhooks verify provider signatures and replay rules over raw bytes befo
 ## OpenAPI and contract gates
 Publish OpenAPI for every public REST endpoint, including request/response schemas, examples without real data, errors, permissions, idempotency, pagination and limits. Maintain WebSocket/event documentation alongside it.
 Review generated schema diffs, validate examples and run contract tests in CI once application tooling exists. Framework-generated documentation alone is insufficient if custom behavior is missing.
+
+## FL-002 technical probes
+The implemented /health and /ready routes are unversioned operational probes, not product APIs. /openapi.json documents them. Readiness reports application initialization only, explicitly declaring dependency_checks as not_configured. Its 503 uses the readiness report schema; other technical HTTP failures use the problem envelope. See [API bootstrap contract](../apps/api/README.md).
