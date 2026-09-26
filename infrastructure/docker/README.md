@@ -96,8 +96,17 @@ and restore. Reverting these files alone does not downgrade stored data.
 
 Docker-outside-of-Docker runs services on the daemon host, not inside the development
 container. Named volumes avoid paths that differ between those environments.
-Validation uses `docker compose exec` and therefore needs no host SQL/Redis/AMQP
-clients and does not assume devcontainer `localhost` reaches daemon host ports.
+Validation uses `docker compose exec -T` with stdin redirected from `/dev/null`
+and therefore needs no host SQL/Redis/AMQP clients and does not assume devcontainer
+`localhost` reaches daemon host ports.
+The probes keep the running services' environment and network and create no temporary
+containers. Closing stdin is intentional: `-T` disables the container TTY but still
+attaches stdin. With terminal input, GNU `timeout` places Compose in a background
+process group; a terminal read can stop it with `SIGTTIN`, even after SQL output,
+until the timeout kills it. Immediate EOF avoids that lifecycle hang while retaining
+the 60-second deadline and nonzero probe exit status.
+Run `python3 infrastructure/docker/test_validate.py` for the terminal lifecycle and
+failure/cleanup regression checks on Linux (standard library only; no Docker required).
 Loopback bindings intentionally remain private. Codespaces port forwarding may not
 reach daemon-host loopback from the devcontainer; the native checks still work.
 For the UI, use an authorized tunnel to the daemon-host loopback if the Ports panel

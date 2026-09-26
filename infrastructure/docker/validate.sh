@@ -19,7 +19,9 @@ env_file="$root/.env.example"
 [[ ! -f "$root/.env" ]] || env_file="$root/.env"
 compose=(docker compose --project-name fleetlink-local --project-directory "$root"
     --env-file "$env_file" -f "$root/infrastructure/docker/compose.yaml")
-run() { timeout --kill-after=10s 60s "${compose[@]}" "$@"; }
+# Probes never consume input. Compose exec -T still attaches stdin; under timeout
+# a terminal read can stop its background process group with SIGTTIN. Supply EOF.
+run() { timeout --kill-after=10s 60s "${compose[@]}" "$@" </dev/null; }
 timeout --kill-after=5s 15s docker compose version
 run config --quiet
 if [[ "$action" == config ]]; then
