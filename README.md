@@ -3,7 +3,7 @@
 FleetLink is a planned production-grade Commerce + Logistics Super App connecting customers, merchants, riders, and administrators through one user identity with multiple roles.
 
 ## Current status
-FL-002: Monorepo Bootstrap, based on accepted FL-001 commit 6c4f4c9ef1d7c15eb1306563e4e6a727b1e568e7. The API implements only /health and /ready plus OpenAPI metadata. The Flutter foundation contains a running screen and Material 3 themes. There is no product functionality, database schema, external infrastructure or deployment. Flutter tooling was unavailable: native runner generation, dependency lock resolution, analyze and widget validation remain unverified (see apps/mobile/README.md).
+FL-002: Monorepo Bootstrap, based on accepted FL-001 commit 6c4f4c9ef1d7c15eb1306563e4e6a727b1e568e7. The API implements only /health and /ready plus OpenAPI metadata. The Flutter foundation contains a running screen and Material 3 themes. FL-003 adds optional local PostgreSQL/PostGIS, Redis and RabbitMQ infrastructure. There is no product functionality, application database schema or production deployment. Flutter analysis and the three widget/theme tests passed during FL-003 validation; native runner work remains outside this task (see apps/mobile/README.md).
 
 ## Product and architecture
 Anonymous visitors can browse the public marketplace. Authenticated users can access authorized customer, merchant, rider, and administrator experiences without separate accounts per role.
@@ -63,6 +63,13 @@ uv run --project apps/api --locked uvicorn fleetlink.main:create_app --factory -
 The server binds to loopback port 8000 by default. Check `http://127.0.0.1:8000/health`, `/ready` and `/openapi.json`. This local development listener is not a production ingress; production TLS remains required.
 Environment settings use FLEETLINK_ENVIRONMENT and FLEETLINK_LOG_LEVEL. Defaults run locally without an environment file. To use optional root `.env` overrides, copy `.env.example` to `.env`, then add `--env-file .env` to `uv run`. No credentials are needed.
 
+## Local infrastructure
+
+FL-003 provisions optional services without changing API startup or readiness.
+Run `make infra-up`, `make infra-check`, and `make infra-down` from the repository root.
+See [local infrastructure setup](infrastructure/docker/README.md) for environment
+variables, ports, Codespaces networking, persistence and destructive reset instructions.
+
 ## Backend validation
 From the repository root:
 
@@ -93,7 +100,7 @@ flutter test
 flutter run -d chrome
 ```
 
-Flutter was unavailable during bootstrap. These checks are not claimed to pass; the generated pubspec.lock and Android/iOS runners require the SDK and must be reviewed/committed before native development. [Mobile setup](apps/mobile/README.md) contains exact generation commands, placeholder namespace, and remaining validation. No real corporate domain or release identifiers have been selected.
+Flutter was unavailable during the original bootstrap; analysis and tests have since passed during FL-003 validation. Android/iOS runners still require separate review before native development. [Mobile setup](apps/mobile/README.md) contains exact generation commands, placeholder namespace, and remaining validation. No real corporate domain or release identifiers have been selected.
 Riverpod and GoRouter have documented composition boundaries but no unused dependency installations. Admin framework selection remains a future ADR. No new significant architecture outside the approved direction is adopted.
 
 See [testing standards](docs/TESTING.md) for future gates. Local bootstrap validation does not establish launch readiness.

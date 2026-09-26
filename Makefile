@@ -1,5 +1,11 @@
 .PHONY: help api-install api-run api-test api-lint api-typecheck mobile-get mobile-analyze mobile-test
 help:
+	@echo "infra-config    Validate local Compose configuration"
+	@echo "infra-up        Start infrastructure and wait for health"
+	@echo "infra-status    Show infrastructure status"
+	@echo "infra-check     Start and validate infrastructure"
+	@echo "infra-down      Stop infrastructure; preserve data"
+	@echo "infra-reset     DESTRUCTIVE: stop and delete infrastructure data"
 	@echo "api-install     Install locked Python dependencies"
 	@echo "api-run         Run the bootstrap API locally"
 	@echo "api-test        Run backend tests"
@@ -26,3 +32,7 @@ mobile-analyze:
 	cd apps/mobile && flutter analyze
 mobile-test:
 	cd apps/mobile && flutter test
+
+.PHONY: infra-config infra-up infra-status infra-check infra-down infra-reset
+infra-config infra-up infra-status infra-check infra-down infra-reset:
+	./infrastructure/docker/validate.sh $(patsubst infra-%,%,$@)
