@@ -1,0 +1,69 @@
+name: fleetlink-local
+
+services:
+  postgres:
+    image: postgis/postgis:18-3.6@sha256:60f6ad1d21ea86a67d47780b9a0d1e1d200500f62b19293fa834d0dea80b8677
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${FLEETLINK_POSTGRES_DB:-fleetlink_dev}
+      POSTGRES_USER: ${FLEETLINK_POSTGRES_USER:-fleetlink_dev}
+      POSTGRES_PASSWORD: ${FLEETLINK_POSTGRES_PASSWORD:-development-only-postgres}
+    ports:
+      - "127.0.0.1:${FLEETLINK_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    networks: [local]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  redis:
+    image: redis:8.10.2-trixie@sha256:d5ac52db24d4e70566fe9944f22cf5bdc2bc739b05c0f426335161ea6c23f3b3
+    restart: unless-stopped
+    command: [redis-server, --appendonly, 'yes']
+    ports:
+      - "127.0.0.1:${FLEETLINK_REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks: [local]
+    healthcheck:
+      test: [CMD-SHELL, 'test "$(redis-cli ping)" = PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  rabbitmq:
+    image: rabbitmq:4.3.6-management@sha256:cdf40d8cb363d145e377ed88d59696a42386ffe54b30125f10eb128b862eea95
+    hostname: fleetlink-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${FLEETLINK_RABBITMQ_USER:-fleetlink_dev}
+      RABBITMQ_DEFAULT_PASS: ${FLEETLINK_RABBITMQ_PASSWORD:-development-only-rabbitmq}
+    ports:
+      - "127.0.0.1:${FLEETLINK_RABBITMQ_AMQP_PORT:-5672}:5672"
+      - "127.0.0.1:${FLEETLINK_RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks: [local]
+    healthcheck:
+      test: [CMD-SHELL, 'rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q check_local_alarms && rabbitmq-diagnostics -q check_port_connectivity']
+      interval: 15s
+      timeout: 15s
+      retries: 12
+      start_period: 60s
+
+volumes:
+  postgres_data:
+    name: fleetlink-local-postgres-data
+  redis_data:
+    name: fleetlink-local-redis-data
+  rabbitmq_data:
+    name: fleetlink-local-rabbitmq-data
+
+networks:
+  local:
+    name: fleetlink-local-network

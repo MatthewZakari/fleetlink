@@ -48,3 +48,10 @@ Extract a context only after an ADR demonstrates scaling, isolation or ownership
 
 ## FL-002 implementation boundary
 The initial src-layout API factory wires validated settings, JSON logging, request correlation, problem responses and application-lifecycle readiness. No domain module or external dependency integration exists. Flutter contains a minimal Material 3 shell and theme/localization boundaries; Riverpod and GoRouter remain planned. Native runner generation and Flutter SDK validation require available tooling; see [mobile status](../apps/mobile/README.md). Worker/realtime, shared packages, admin and infrastructure directories are documentation-only boundaries, not deployed services.
+
+## FL-003 implementation boundary
+Optional local Compose services provision PostgreSQL/PostGIS, Redis and RabbitMQ with
+named development volumes and native validation. This supersedes the Docker placeholder
+status above; all other future infrastructure boundaries remain unimplemented. The API
+has no service clients or persistence and its probes remain infrastructure-independent.
+See [local infrastructure](../infrastructure/docker/README.md).
