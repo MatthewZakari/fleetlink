@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('application boots with an accessible running message', (tester) async {
+  testWidgets('application boots with an accessible running message',
+      (tester) async {
     await tester.pumpWidget(const FleetLinkApp());
     expect(find.text('FleetLink'), findsOneWidget);
     expect(find.text('FleetLink is running.'), findsOneWidget);
