@@ -3,6 +3,11 @@ set -euo pipefail
 
 echo "Setting up FleetLink development environment..."
 
+# Install system development dependencies required by FleetLink.
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends git-lfs
+
+
 # Install uv at the version currently used by FleetLink.
 curl -LsSf https://astral.sh/uv/0.12.19/install.sh | sh
 
