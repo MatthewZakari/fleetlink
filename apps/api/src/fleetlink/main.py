@@ -5,11 +5,9 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Response
-from fastapi.exceptions import RequestValidationError
-from starlette.exceptions import HTTPException
 
 from fleetlink.core.config import Settings
-from fleetlink.core.http import RequestContextMiddleware, http_error, validation_error
+from fleetlink.core.http import problem_responses, register_http
 from fleetlink.core.logging import configure_logging
 from fleetlink.core.readiness import (
     HealthResponse,
@@ -21,11 +19,11 @@ from fleetlink.core.readiness import (
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings if settings is not None else Settings()
-    configure_logging(settings.log_level)
     readiness = Readiness()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        configure_logging()
         readiness.initialized = True
         try:
             yield
@@ -38,12 +36,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
         docs_url=None,
         redoc_url=None,
+        responses=problem_responses(),
     )
     app.state.settings = settings
     app.state.readiness = readiness
-    app.add_middleware(RequestContextMiddleware)
-    app.add_exception_handler(HTTPException, http_error)  # type: ignore[arg-type]
-    app.add_exception_handler(RequestValidationError, validation_error)  # type: ignore[arg-type]
+    register_http(app, settings.log_level)
 
     @app.get("/health", response_model=HealthResponse, tags=["technical"])
     async def health() -> HealthResponse:

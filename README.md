@@ -3,7 +3,7 @@
 FleetLink is a planned production-grade Commerce + Logistics Super App connecting customers, merchants, riders, and administrators through one user identity with multiple roles.
 
 ## Current status
-FL-002: Monorepo Bootstrap, based on accepted FL-001 commit 6c4f4c9ef1d7c15eb1306563e4e6a727b1e568e7. The API implements only /health and /ready plus OpenAPI metadata. The Flutter foundation contains a running screen and Material 3 themes. FL-003 adds optional local PostgreSQL/PostGIS, Redis and RabbitMQ infrastructure. There is no product functionality, application database schema or production deployment. Flutter analysis and the three widget/theme tests passed during FL-003 validation; native runner work remains outside this task (see apps/mobile/README.md).
+FL-004 strengthens the FastAPI technical core on the accepted FL-001 through FL-003 foundation. The API implements only /health and /ready plus OpenAPI metadata. The Flutter foundation contains a running screen and Material 3 themes. FL-003 adds optional local PostgreSQL/PostGIS, Redis and RabbitMQ infrastructure. There is no product functionality, application database schema or production deployment. Flutter analysis and the three widget/theme tests passed during FL-003 validation; native runner work remains outside this task (see apps/mobile/README.md).
 
 ## Product and architecture
 Anonymous visitors can browse the public marketplace. Authenticated users can access authorized customer, merchant, rider, and administrator experiences without separate accounts per role.
@@ -57,7 +57,7 @@ From the repository root:
 
 ```sh
 uv sync --project apps/api --locked
-uv run --project apps/api --locked uvicorn fleetlink.main:create_app --factory --no-access-log
+uv run --project apps/api --locked uvicorn fleetlink.main:create_app --factory --no-access-log --no-server-header --no-proxy-headers
 ```
 
 The server binds to loopback port 8000 by default. Check `http://127.0.0.1:8000/health`, `/ready` and `/openapi.json`. This local development listener is not a production ingress; production TLS remains required.
