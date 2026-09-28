@@ -4,7 +4,7 @@ Python 3.12, uv 0.12.19. Run the root README commands. This is a src-layout inst
 
 ## Composition and settings
 The factory validates Settings once, creates per-app settings/readiness state and centrally registers technical middleware and exception handlers. It does not configure logging at import or factory time. Lifespan installs an idempotent process-wide JSON sink, marks the instance ready, and resets readiness in a finally block on shutdown. Request log levels and correlation use context variables, so constructing or serving another app does not change an existing app's request logging policy. Outside requests the sink defaults to INFO. Native FastAPI dependencies `get_settings` and `get_correlation_id` live in `core/dependencies.py`; `get_readiness` remains in `core/readiness.py`. Tests can inject immutable Settings or use dependency overrides; no service container is needed.
-Environment variables use the FLEETLINK_ prefix. environment accepts local/test/staging/production; log_level accepts DEBUG/INFO/WARNING/ERROR/CRITICAL. Invalid values fail construction; human-readable validation diagnostics omit rejected values. Do not log Settings or raw Pydantic error dictionaries. No external dependencies, secrets or dotenv auto-discovery are required. To load the root example explicitly, copy it to .env and use uv run --env-file .env --project apps/api --locked ... from the root.
+Environment variables use the FLEETLINK_ prefix. environment accepts local/test/staging/production; log_level accepts DEBUG/INFO/WARNING/ERROR/CRITICAL. Invalid values fail construction; human-readable validation diagnostics omit rejected values. Do not log Settings or raw Pydantic error dictionaries. With persistence disabled, no external services or secrets are required. There is no dotenv auto-discovery. To load the root example explicitly, copy it to .env and use uv run --env-file .env --project apps/api --locked ... from the root.
 
 ## Technical HTTP contract
 - GET /health â†’ 200 {"status":"ok"}; no dependency I/O.
@@ -50,3 +50,23 @@ No dependencies, persistence or deployment resources were added. Rollout require
 restarting the API; rollback restores the prior code and launch command, with no data
 migration. Existing probe bodies, status codes and correlation rules remain compatible;
 new response headers and OpenAPI failure descriptions are additive.
+
+## FL-005 persistence
+The FL-004 statements above describe that milestone; FL-005 adds SQLAlchemy/asyncpg and
+Alembic plus a direct declaration of the existing AnyIO dependency. See
+[configuration, lifecycle, transactions and dependency rationale](../../docs/DATABASE.md#fl-005-persistence-foundation).
+`infrastructure/database.py` owns the engine/session adapter and empty metadata registry;
+`core/dependencies.py` exposes typed `get_database` and `get_session`. Factory construction
+performs no database I/O or engine creation. Lifespan resource enablement is explicit via
+`FLEETLINK_DATABASE_ENABLED`; default false preserves isolated factory tests.
+
+`alembic.ini`, `migrations/env.py`, and `migrations/versions/0001_technical_baseline.py`
+provide migration tooling separately from startup. Install with `uv sync --locked`
+(including the default dev group) for migration execution. The baseline validates PostGIS
+and manages only revision tracking. Future metadata imports must be deliberate; migrations
+never discover arbitrary domain modules or create tables at application startup.
+
+`make api-test` collects only `tests/`; [database validation](../../docs/TESTING.md#fl-005-database-validation)
+uses `tests_db/` and explicit test database configuration. Strict mypy includes `src`,
+`tests`, `tests_db` and `migrations`. No pytest-asyncio is added; async tests use `asyncio.run`.
+No database availability is implied by `/ready`, and `/health` performs no database work.

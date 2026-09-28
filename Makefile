@@ -8,7 +8,14 @@ help:
 	@echo "infra-reset     DESTRUCTIVE: stop and delete infrastructure data"
 	@echo "api-install     Install locked Python dependencies"
 	@echo "api-run         Run the bootstrap API locally"
-	@echo "api-test        Run backend tests"
+	@echo "api-test        Run infrastructure-free backend tests"
+	@echo "api-test-db     Run explicit isolated PostgreSQL tests"
+	@echo "api-db-test-setup  Create fresh fleetlink_test_fl005 with PostGIS"
+	@echo "api-db-test-drop   DESTRUCTIVE: drop only fleetlink_test_fl005"
+	@echo "api-db-upgrade  Migrate explicitly configured database to head"
+	@echo "api-db-current  Show explicitly configured database revision"
+	@echo "api-db-history  Show migration history (no connection)"
+	@echo "api-db-downgrade-base  Explicit rollback to base"
 	@echo "api-lint        Check backend lint and formatting"
 	@echo "api-typecheck   Check backend types"
 	@echo "mobile-get      Resolve Flutter dependencies"
@@ -25,7 +32,7 @@ api-lint:
 	uv run --project apps/api --locked ruff check apps/api
 	uv run --project apps/api --locked ruff format --check apps/api
 api-typecheck:
-	cd apps/api && uv run --locked mypy src tests
+	cd apps/api && uv run --locked mypy src tests tests_db migrations
 mobile-get:
 	cd apps/mobile && flutter pub get
 mobile-analyze:
@@ -36,3 +43,19 @@ mobile-test:
 .PHONY: infra-config infra-up infra-status infra-check infra-down infra-reset
 infra-config infra-up infra-status infra-check infra-down infra-reset:
 	./infrastructure/docker/validate.sh $(patsubst infra-%,%,$@)
+
+.PHONY: api-test-db api-db-test-setup api-db-test-drop api-db-upgrade api-db-current api-db-history api-db-downgrade-base
+api-test-db:
+	uv run --project apps/api --locked pytest apps/api/tests_db
+api-db-test-setup:
+	./infrastructure/docker/test-database.sh setup fleetlink_test_fl005
+api-db-test-drop:
+	./infrastructure/docker/test-database.sh drop fleetlink_test_fl005
+api-db-upgrade:
+	uv run --project apps/api --locked alembic -c apps/api/alembic.ini upgrade head
+api-db-current:
+	uv run --project apps/api --locked alembic -c apps/api/alembic.ini current
+api-db-history:
+	uv run --project apps/api --locked alembic -c apps/api/alembic.ini history
+api-db-downgrade-base:
+	uv run --project apps/api --locked alembic -c apps/api/alembic.ini downgrade base

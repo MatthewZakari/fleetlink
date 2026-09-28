@@ -46,3 +46,48 @@ and failures after response start never transmit a second response. Test-only ro
 are registered on isolated instances and never appear in the shipped API.
 Run `make infra-config`, `python3 infrastructure/docker/test_validate.py`,
 `make mobile-analyze` and `make mobile-test` for adjacent milestone regressions.
+
+## FL-005 database validation
+The default `make api-test` still selects only `apps/api/tests`, including configuration,
+secret handling, no-network lifecycle and explicit transaction tests. It does not start
+Docker, create databases or migrate. `make api-test-db` explicitly selects `tests_db` and
+fails if configuration/infrastructure is absent; it never silently skips database checks.
+No SQLite substitution exists. The fixture requires exactly
+`FLEETLINK_POSTGRES_DB=fleetlink_test_fl005` before any connection or migration.
+
+From the root, with the intended Compose configuration:
+
+```sh
+make infra-up
+make api-db-test-setup
+# On the daemon host the default host is 127.0.0.1. Otherwise set an authorized reachable host.
+FLEETLINK_POSTGRES_DB=fleetlink_test_fl005 make api-test-db
+# Explicit test-only destruction, after recording evidence:
+make api-db-test-drop
+```
+
+If root `.env` contains custom credentials, load it explicitly for the Python process:
+
+```sh
+uv run --env-file .env --project apps/api --locked env \
+  FLEETLINK_POSTGRES_DB=fleetlink_test_fl005 pytest apps/api/tests_db
+```
+
+The final override is deliberate: never run this suite against `fleetlink_dev`. Override
+host/port explicitly if required; do not print credential values. The fixed dedicated test
+database must be newly created for each complete suite; the migration test rejects existing
+revision tracking, rather than silently claiming a fresh migration. Setup refuses existing
+databases. To repeat the full suite, explicitly run the test-only drop and setup commands.
+Never use `infra-reset` to prepare tests, and do not run suites concurrently.
+
+Real PostgreSQL tests cover authenticated access and invalid-password failure, PostGIS
+extension/version and SRID 4326 operations, session cleanup, committed temporary-table
+writes, injected-failure rollback, cancelled-task rollback, refused connections and pool
+disposal. Migration tests upgrade a fresh database, repeat head, downgrade to base, and
+re-upgrade, asserting revision state and PostGIS survival. Only temporary/test-owned objects
+and Alembic revision tracking are used; no domain entities or fixtures exist.
+
+Required regressions remain `make api-test`, `make api-lint`, `make api-typecheck`,
+`make infra-config`, `python3 infrastructure/docker/test_validate.py`,
+`make mobile-analyze` and `make mobile-test`. Record failures/unavailable checks separately;
+mocked lifecycle tests do not establish PostgreSQL integration success.

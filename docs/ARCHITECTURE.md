@@ -65,3 +65,20 @@ logging side effects. Pure ASGI middleware handles correlation, safe error respo
 completion timing and baseline response headers. No domain routers, external clients,
 service container or new dependencies are introduced. This extends the accepted
 architecture without a significant deviation requiring an ADR.
+
+## FL-005 implementation boundary
+SQLAlchemy 2.x/asyncpg adapters live in `apps/api/src/fleetlink/infrastructure/database.py`.
+Each enabled application lifespan owns its engine and session factory; construction is
+lazy with respect to connections and shutdown disposes the pool. Typed native dependencies
+expose these resources without a service container. Sessions require explicit transactions.
+The existing application-only readiness and health contracts are unchanged; neither is a
+database availability assertion. No domain repositories or mappings exist.
+
+Alembic executes outside application startup using an async connection and `run_sync`.
+The technical baseline validates infrastructure-provisioned PostGIS and tracks revision
+state without domain tables. Metadata is empty and is an explicit future mapping registry;
+autogeneration ignores reflected tables absent from that registry, protecting extension
+and unrelated objects. Reviewed manual migrations are required for intentional table drops.
+These choices implement the prescribed SQLAlchemy/Alembic architecture and FL-005 extension
+policy; no significant architectural deviation or new context ownership requires an ADR.
+See [database operations](DATABASE.md#fl-005-persistence-foundation).

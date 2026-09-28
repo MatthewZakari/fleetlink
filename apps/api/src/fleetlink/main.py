@@ -15,6 +15,7 @@ from fleetlink.core.readiness import (
     ReadinessResponse,
     get_readiness,
 )
+from fleetlink.infrastructure.database import Database
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -24,11 +25,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         configure_logging()
+        database = Database(settings) if settings.database_enabled else None
+        app.state.database = database
         readiness.initialized = True
         try:
             yield
         finally:
             readiness.initialized = False
+            app.state.database = None
+            if database is not None:
+                await database.dispose()
 
     app = FastAPI(
         title="FleetLink technical API",
@@ -40,6 +46,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.readiness = readiness
+    app.state.database = None
     register_http(app, settings.log_level)
 
     @app.get("/health", response_model=HealthResponse, tags=["technical"])

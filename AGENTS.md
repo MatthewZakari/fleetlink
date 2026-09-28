@@ -1,7 +1,7 @@
 # FleetLink agent instructions
 
 ## Scope and authority
-FleetLink is production commerce and logistics software. Accepted FL-001 through FL-003 established the engineering specification, monorepo bootstrap, technical API endpoints, minimal Flutter shell, developer tooling and optional local infrastructure. Implementation is authorized only by the current explicitly scoped engineering task; FL-004 strengthens the FastAPI technical core. No database tables, authentication, marketplace, payments or logistics implementation is authorized.
+FleetLink is production commerce and logistics software. Accepted FL-001 through FL-003 established the engineering specification, monorepo bootstrap, technical API endpoints, minimal Flutter shell, developer tooling and optional local infrastructure. Implementation is authorized only by the current explicitly scoped engineering task; FL-004 strengthened the FastAPI technical core; FL-005 adds optional async PostgreSQL engine/session infrastructure, Alembic revision tracking and isolated PostgreSQL/PostGIS tests. No domain tables, authentication, marketplace, payments or logistics implementation is authorized.
 The accepted technology and architecture direction is documented in docs/ARCHITECTURE.md. Planned capabilities are not implemented capabilities.
 Read this file before making any change, then README.md and the relevant documents under docs/. Inspect any more specific AGENTS.md instructions in the area being changed.
 
