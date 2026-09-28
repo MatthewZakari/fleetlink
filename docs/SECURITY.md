@@ -34,3 +34,12 @@ Maintain threat models and incident response plans, credential-revocation proced
 Establish dependency and secret scanning, SAST, container/image scanning and infrastructure review in CI. Run DAST against authorized nonproduction environments with safe test data. Prioritize findings by exploitability/impact, assign owners and prohibit unexplained suppression.
 Test resource-level authorization, session replay, token expiry/key rotation, injection, SSRF, file handling and rate-limit bypass. Review externally exposed or financial flows before launch; record accepted risks and remediation deadlines.
 These are requirements for future tooling and delivery, not claims of completed scans or certification.
+
+## Implemented FL-004 technical baseline
+The current API provides sanitized technical errors, bounded correlation headers,
+context-isolated structured logs and explicit nosniff/framing/referrer/cache response
+headers. Debug and interactive docs are disabled; no cross-origin permissions are
+installed. The documented local server command disables access logs, server identity
+headers and proxy-header trust. See [API operations](../apps/api/README.md) for limits,
+including propagated streaming failures and deferred TLS/ingress policy. Authentication,
+authorization, rate limiting and production hardening remain separately scoped work.

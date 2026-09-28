@@ -44,3 +44,12 @@ Review generated schema diffs, validate examples and run contract tests in CI on
 
 ## FL-002 technical probes
 The implemented /health and /ready routes are unversioned operational probes, not product APIs. /openapi.json documents them. Readiness reports application initialization only, explicitly declaring dependency_checks as not_configured. Its 503 uses the readiness report schema; other technical HTTP failures use the problem envelope. See [API bootstrap contract](../apps/api/README.md).
+
+## FL-004 technical contract additions
+Probe bodies, readiness 503 reports and seven-field Problem envelopes are preserved.
+OpenAPI now explicitly advertises application/problem+json for technical 404, 405, 422
+and 500 failures. Stable codes remain http_404/http_405, validation_error and
+internal_error (other HTTP exceptions use http_<status>). Framework exception details
+and rejected validation inputs are omitted. All HTTP responses include nosniff,
+DENY framing, no-referrer and no-store headers; see the [API foundation](../apps/api/README.md)
+for exact names, correlation bounds and proxy assumptions. No CORS permission is enabled.

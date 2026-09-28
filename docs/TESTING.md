@@ -35,3 +35,14 @@ Use controlled clocks, seeded randomness and explicit timezones. Exercise suppor
 Pull requests should run formatting, lint/type checks, unit and targeted integration/API tests, contract checks and required security scans. Broader E2E, migration, performance and device suites run at appropriate merge/release or scheduled gates.
 Set coverage targets from risk; coverage percentage alone is not a release criterion. Identity, money, stock and delivery-state invariants require explicit negative and concurrency tests.
 Before production, agree on service objectives and load models, verify migrations/backups/restore, rehearse rollback and resolve release-blocking security findings. Quarantined flaky tests require an owner and deadline; they cannot silently substitute for required evidence.
+
+## FL-004 technical core coverage
+`make api-test`, `make api-lint` and `make api-typecheck` validate the infrastructure-free
+core. Tests cover independent factories, immutable/environment settings, dependency
+overrides, pre/post-lifespan readiness, error/OpenAPI contracts, security headers,
+structured UTC logs and sensitive-data omission. Direct ASGI tests use an asyncio
+barrier to force concurrent requests without sleep-based timing, and verify cancellation
+and failures after response start never transmit a second response. Test-only routes
+are registered on isolated instances and never appear in the shipped API.
+Run `make infra-config`, `python3 infrastructure/docker/test_validate.py`,
+`make mobile-analyze` and `make mobile-test` for adjacent milestone regressions.

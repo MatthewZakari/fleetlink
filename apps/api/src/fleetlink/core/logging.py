@@ -6,6 +6,8 @@ import sys
 from contextvars import ContextVar
 from datetime import UTC, datetime
 
+request_log_level: ContextVar[int] = ContextVar("request_log_level", default=logging.INFO)
+
 correlation_id: ContextVar[str | None] = ContextVar("correlation_id", default=None)
 
 
@@ -26,10 +28,19 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload)
 
 
-def configure_logging(level: str) -> None:
+class RequestLevelFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno >= request_log_level.get()
+
+
+def configure_logging() -> None:
+    """Install one process-wide sink; request levels belong to application context."""
     logger = logging.getLogger("fleetlink")
+    if any(isinstance(handler.formatter, JsonFormatter) for handler in logger.handlers):
+        return
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JsonFormatter())
-    logger.handlers = [handler]
-    logger.setLevel(level)
+    handler.addFilter(RequestLevelFilter())
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
     logger.propagate = False

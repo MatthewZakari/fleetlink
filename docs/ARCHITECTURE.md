@@ -55,3 +55,13 @@ named development volumes and native validation. This supersedes the Docker plac
 status above; all other future infrastructure boundaries remain unimplemented. The API
 has no service clients or persistence and its probes remain infrastructure-independent.
 See [local infrastructure](../infrastructure/docker/README.md).
+
+## FL-004 implementation boundary
+The existing factory remains the composition root. Technical HTTP registration is
+centralized, native dependencies expose immutable settings/correlation/readiness, and
+lifespan owns initialization and shutdown readiness. A shared JSON logging sink uses
+request context for per-app log levels and correlation; factory construction has no
+logging side effects. Pure ASGI middleware handles correlation, safe error responses,
+completion timing and baseline response headers. No domain routers, external clients,
+service container or new dependencies are introduced. This extends the accepted
+architecture without a significant deviation requiring an ADR.

@@ -18,7 +18,7 @@ help:
 api-install:
 	uv sync --project apps/api --locked
 api-run:
-	uv run --project apps/api --locked uvicorn fleetlink.main:create_app --factory --no-access-log
+	uv run --project apps/api --locked uvicorn fleetlink.main:create_app --factory --no-access-log --no-server-header --no-proxy-headers
 api-test:
 	uv run --project apps/api --locked pytest apps/api/tests
 api-lint:
