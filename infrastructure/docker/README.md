@@ -2,7 +2,7 @@
 
 This optional development stack provisions PostgreSQL/PostGIS, Redis and RabbitMQ.
 The API still starts and passes its tests without these services; `/health` and
-`/ready` remain application-only. No application clients, domain tables, workers,
+`/ready` remain application-only. FL-005 adds an opt-in application PostgreSQL adapter. No domain tables, workers,
 queues or business exchanges are configured. PostGIS may create its own extension
 objects; RabbitMQ creates its standard built-in broker objects.
 
@@ -47,8 +47,8 @@ per command. Failures return nonzero and print status; cleanup failure is report
 
 The script explicitly loads root `.env` if present, otherwise `.env.example`.
 Exported shell values override the file; missing/empty values use Compose defaults.
-The API's existing environment convention is unchanged. No connection strings are
-introduced into application settings.
+The API reuses these PostgreSQL variables in FL-005. Its settings construct a safe driver
+URL internally; no DSN variable or second credential source exists.
 
 | Variable | Development default | Purpose |
 | --- | --- | --- |
@@ -152,3 +152,30 @@ PostGIS GPL-2.0-or-later, Redis 8 offers AGPLv3/RSALv2/SSPLv1 licensing choices,
 RabbitMQ uses MPL-2.0; bundled image components have their own licenses. Review
 licensing before redistribution or production adoption. Operational costs are local
 CPU, memory, disk, image downloads and responsibility for reviewed patch updates.
+
+## FL-005 database testing and privileges
+`make api-db-test-setup` creates only `fleetlink_test_fl005` from `template0` and provisions
+PostGIS with the existing container administrator. It fails if the database already exists;
+it never resets or drops an existing database. `make api-db-test-drop` explicitly drops
+only that test database, without FORCE, leaving `fleetlink_dev` and Docker volumes intact.
+Run setup after `make infra-up` with development Compose configuration, before exporting a
+test database override for the API. Both operations use bounded authenticated TCP commands.
+Do not run parallel suites against this fixed test database.
+
+See [test workflow](../../docs/TESTING.md#fl-005-database-validation). The API process must
+reach PostgreSQL itself. On a Linux daemon sharing the devcontainer network, an explicitly
+selected container IP may work; inspect it with:
+
+```sh
+docker inspect fleetlink-local-postgres-1 --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
+```
+
+Use that address only if reachable from this environment; it changes on container recreation.
+Otherwise run from the daemon host or an authorized environment on the Compose network
+(`postgres:5432`). A container IP is not universally reachable in Docker-outside-of-Docker.
+Keep port bindings private. Export `FLEETLINK_POSTGRES_HOST` for the test process only.
+
+PostGIS provisioning remains privileged infrastructure work, never application migration
+DDL. Local administrator/migration/runtime identities are shared only for development.
+Production role separation, TLS and grants are deferred. Neither API probes nor engine
+construction verify database health. Existing `validate.sh` behavior is unchanged.

@@ -3,7 +3,7 @@
 FleetLink is a planned production-grade Commerce + Logistics Super App connecting customers, merchants, riders, and administrators through one user identity with multiple roles.
 
 ## Current status
-FL-004 strengthens the FastAPI technical core on the accepted FL-001 through FL-003 foundation. The API implements only /health and /ready plus OpenAPI metadata. The Flutter foundation contains a running screen and Material 3 themes. FL-003 adds optional local PostgreSQL/PostGIS, Redis and RabbitMQ infrastructure. There is no product functionality, application database schema or production deployment. Flutter analysis and the three widget/theme tests passed during FL-003 validation; native runner work remains outside this task (see apps/mobile/README.md).
+FL-005 adds an optional async PostgreSQL persistence foundation and Alembic technical baseline to the accepted FL-001 through FL-004 foundation. The API implements only /health and /ready plus OpenAPI metadata. The Flutter foundation contains a running screen and Material 3 themes. FL-003 adds optional local PostgreSQL/PostGIS, Redis and RabbitMQ infrastructure. There is no product functionality, domain database schema or production deployment. The only application-managed database object is Alembic revision tracking. Flutter analysis and the three widget/theme tests passed during FL-003 validation; native runner work remains outside this task (see apps/mobile/README.md).
 
 ## Product and architecture
 Anonymous visitors can browse the public marketplace. Authenticated users can access authorized customer, merchant, rider, and administrator experiences without separate accounts per role.
@@ -61,11 +61,11 @@ uv run --project apps/api --locked uvicorn fleetlink.main:create_app --factory -
 ```
 
 The server binds to loopback port 8000 by default. Check `http://127.0.0.1:8000/health`, `/ready` and `/openapi.json`. This local development listener is not a production ingress; production TLS remains required.
-Environment settings use FLEETLINK_ENVIRONMENT and FLEETLINK_LOG_LEVEL. Defaults run locally without an environment file. To use optional root `.env` overrides, copy `.env.example` to `.env`, then add `--env-file .env` to `uv run`. No credentials are needed.
+Environment settings use FLEETLINK_ENVIRONMENT and FLEETLINK_LOG_LEVEL. Defaults run locally without an environment file. To use optional root `.env` overrides, copy `.env.example` to `.env`, then add `--env-file .env` to `uv run`. Credentials are needed only when explicitly using persistence; the API reuses the Compose PostgreSQL variables.
 
 ## Local infrastructure
 
-FL-003 provisions optional services without changing API startup or readiness.
+FL-003 provisions optional services. FL-005 adds opt-in API persistence resources while preserving application-only readiness.
 Run `make infra-up`, `make infra-check`, and `make infra-down` from the repository root.
 See [local infrastructure setup](infrastructure/docker/README.md) for environment
 variables, ports, Codespaces networking, persistence and destructive reset instructions.
@@ -83,7 +83,7 @@ Type checking uses the API's configuration (change directory first):
 
 ```sh
 cd apps/api
-uv run --locked mypy src tests
+uv run --locked mypy src tests tests_db migrations
 ```
 
 `make help` lists equivalent root targets. The minimal GitHub Actions workflow runs locked backend install, lint/format, type checks and tests only; it does not deploy anything.
@@ -104,3 +104,22 @@ Flutter was unavailable during the original bootstrap; analysis and tests have s
 Riverpod and GoRouter have documented composition boundaries but no unused dependency installations. Admin framework selection remains a future ADR. No new significant architecture outside the approved direction is adopted.
 
 See [testing standards](docs/TESTING.md) for future gates. Local bootstrap validation does not establish launch readiness.
+
+## Persistence foundation (FL-005)
+
+See [database operations](docs/DATABASE.md#fl-005-persistence-foundation) for explicit
+configuration, privileges, transaction ownership and migration rollback. Resources are
+created during lifespan only when `FLEETLINK_DATABASE_ENABLED=true`; construction does
+not connect. `/ready` does not verify database health. Migrations run separately:
+
+```sh
+FLEETLINK_POSTGRES_DB=fleetlink_dev make api-db-upgrade
+FLEETLINK_POSTGRES_DB=fleetlink_dev make api-db-current
+make api-db-history
+```
+
+These commands use exported configuration; they never discover `.env` implicitly.
+For custom credentials, explicitly load the intended root `.env` using the documented
+`uv run --env-file .env` pattern. `make api-test` stays infrastructure-free.
+See [isolated database tests](docs/TESTING.md#fl-005-database-validation) for setup,
+`make api-test-db`, and explicitly named cleanup commands.
