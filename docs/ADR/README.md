@@ -20,3 +20,8 @@ Reference the ADR from affected docs and pull requests. A proposed ADR does not 
 - Validation: tests, measurements and acceptance criteria.
 - Follow-up: unresolved questions, owner and review trigger.
 - Links: related or superseding ADRs and relevant documentation.
+
+## Records
+
+- [ADR-0001 — Bounded technical task completion](0001-technical-task-completion.md)
+  (Proposed for FL-006 independent review).

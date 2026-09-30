@@ -70,3 +70,19 @@ never discover arbitrary domain modules or create tables at application startup.
 uses `tests_db/` and explicit test database configuration. Strict mypy includes `src`,
 `tests`, `tests_db` and `migrations`. No pytest-asyncio is added; async tests use `asyncio.run`.
 No database availability is implied by `/ready`, and `/health` performs no database work.
+
+## FL-006 Redis and worker infrastructure
+
+`infrastructure/redis.py` provides per-lifespan opt-in async Redis via `get_redis`.
+Factory construction performs no connection attempts. `infrastructure/broker.py` composes
+RabbitMQ-only Celery and a bounded synchronous producer; `infrastructure/tasks.py` registers
+only `fleetlink.technical.probe.v1`. `python -m fleetlink.worker` runs a dedicated prefork
+worker; `python -m fleetlink.technical_smoke` publishes and independently reads completion.
+Neither runs inside FastAPI. Both require `FLEETLINK_CELERY_ENABLED=true`.
+
+See [configuration, dependencies, delivery semantics and rollback](../../docs/ASYNC_INFRASTRUCTURE.md).
+Direct runtime additions are redis, Celery and its existing Kombu runtime; celery-types is
+development-only. Strict mypy covers `src tests tests_db tests_broker migrations`; Ruff
+covers all `apps/api`. `make api-test-tasks` is infrastructure-free; `make api-test-broker`
+uses real services/processes. No endpoints, database mappings, domain jobs or readiness
+dependency checks are added.

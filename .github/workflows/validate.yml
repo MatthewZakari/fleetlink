@@ -26,6 +26,6 @@ jobs:
       - name: Format
         run: uv run --locked ruff format --check .
       - name: Type check
-        run: uv run --locked mypy src tests tests_db migrations
+        run: uv run --locked mypy src tests tests_db tests_broker migrations
       - name: Test
         run: uv run --locked pytest

@@ -10,6 +10,10 @@ help:
 	@echo "api-run         Run the bootstrap API locally"
 	@echo "api-test        Run infrastructure-free backend tests"
 	@echo "api-test-db     Run explicit isolated PostgreSQL tests"
+	@echo "api-worker      Start dedicated technical Celery worker (explicit opt-in)"
+	@echo "api-test-tasks  Run infrastructure-free Redis/Celery tests"
+	@echo "api-test-broker Run explicit real Redis/RabbitMQ/worker tests"
+	@echo "api-task-smoke  Publish technical probe and wait for worker completion"
 	@echo "api-db-test-setup  Create fresh fleetlink_test_fl005 with PostGIS"
 	@echo "api-db-test-drop   DESTRUCTIVE: drop only fleetlink_test_fl005"
 	@echo "api-db-upgrade  Migrate explicitly configured database to head"
@@ -32,7 +36,7 @@ api-lint:
 	uv run --project apps/api --locked ruff check apps/api
 	uv run --project apps/api --locked ruff format --check apps/api
 api-typecheck:
-	cd apps/api && uv run --locked mypy src tests tests_db migrations
+	cd apps/api && uv run --locked mypy src tests tests_db tests_broker migrations
 mobile-get:
 	cd apps/mobile && flutter pub get
 mobile-analyze:
@@ -59,3 +63,13 @@ api-db-history:
 	uv run --project apps/api --locked alembic -c apps/api/alembic.ini history
 api-db-downgrade-base:
 	uv run --project apps/api --locked alembic -c apps/api/alembic.ini downgrade base
+
+.PHONY: api-worker api-test-tasks api-test-broker api-task-smoke
+api-worker:
+	uv run --project apps/api --locked python -m fleetlink.worker
+api-test-tasks:
+	uv run --project apps/api --locked pytest apps/api/tests/test_broker.py
+api-test-broker:
+	FLEETLINK_BROKER_TESTS=1 timeout --kill-after=10s 180s uv run --project apps/api --locked pytest apps/api/tests_broker
+api-task-smoke:
+	uv run --project apps/api --locked python -m fleetlink.technical_smoke

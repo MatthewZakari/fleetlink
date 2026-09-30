@@ -3,6 +3,8 @@
 FleetLink is a planned production-grade Commerce + Logistics Super App connecting customers, merchants, riders, and administrators through one user identity with multiple roles.
 
 ## Current status
+FL-006 implements optional Redis and RabbitMQ/Celery technical infrastructure, pending independent review. It adds a dedicated worker and a harmless transport probe, with no business jobs. See [async infrastructure operations](docs/ASYNC_INFRASTRUCTURE.md).
+
 FL-005 adds an optional async PostgreSQL persistence foundation and Alembic technical baseline to the accepted FL-001 through FL-004 foundation. The API implements only /health and /ready plus OpenAPI metadata. The Flutter foundation contains a running screen and Material 3 themes. FL-003 adds optional local PostgreSQL/PostGIS, Redis and RabbitMQ infrastructure. There is no product functionality, domain database schema or production deployment. The only application-managed database object is Alembic revision tracking. Flutter analysis and the three widget/theme tests passed during FL-003 validation; native runner work remains outside this task (see apps/mobile/README.md).
 
 ## Product and architecture
@@ -32,7 +34,7 @@ This is the long-term technology direction. Only bootstrap dependencies listed i
 apps/api/             FastAPI src layout, technical core, tests and uv.lock
 apps/mobile/          Flutter source, widget tests and minimal web runner
 apps/admin/           Future admin purpose; framework undecided
-services/worker/      Future background execution boundary
+services/worker/      Worker boundary; runtime in the shared API package
 services/realtime/    Conditional future realtime separation
 packages/contracts/  Future versioned contracts
 packages/shared/     Genuinely shared technical primitives only
@@ -83,7 +85,7 @@ Type checking uses the API's configuration (change directory first):
 
 ```sh
 cd apps/api
-uv run --locked mypy src tests tests_db migrations
+uv run --locked mypy src tests tests_db tests_broker migrations
 ```
 
 `make help` lists equivalent root targets. The minimal GitHub Actions workflow runs locked backend install, lint/format, type checks and tests only; it does not deploy anything.
@@ -123,3 +125,22 @@ For custom credentials, explicitly load the intended root `.env` using the docum
 `uv run --env-file .env` pattern. `make api-test` stays infrastructure-free.
 See [isolated database tests](docs/TESTING.md#fl-005-database-validation) for setup,
 `make api-test-db`, and explicitly named cleanup commands.
+
+## Redis and task foundation (FL-006)
+
+`make api-test` remains infrastructure-free, including Redis/Celery unit tests.
+`make api-test-tasks` selects those tests alone. With reachable private services:
+
+```sh
+make infra-up
+FLEETLINK_CELERY_ENABLED=true make api-worker
+# In another terminal with matching broker settings:
+FLEETLINK_CELERY_ENABLED=true make api-task-smoke
+```
+
+`make api-test-broker` starts isolated real workers and verifies completion, retries,
+failure, restart, timeout and cleanup. Missing services cause failure. See
+[test setup and Codespaces connectivity](docs/TESTING.md#fl-006-broker-validation),
+[configuration and dependencies](docs/ASYNC_INFRASTRUCTURE.md), and
+[the proposed result-backend ADR](docs/ADR/0001-technical-task-completion.md).
+Publishing is not completion; Redis is not a second broker or durable ledger.

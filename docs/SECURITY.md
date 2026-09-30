@@ -43,3 +43,19 @@ installed. The documented local server command disables access logs, server iden
 headers and proxy-header trust. See [API operations](../apps/api/README.md) for limits,
 including propagated streaming failures and deferred TLS/ingress policy. Authentication,
 authorization, rate limiting and production hardening remain separately scoped work.
+
+## FL-006 broker/Redis boundary
+
+Redis and Celery are opt-in through immutable Settings. Credentials are hidden from repr,
+AMQP URL components are separately encoded, and connectivity errors omit driver text.
+The documented worker entry point disables the banner and uses structured events instead
+of raw library messages, full payloads or tracebacks. Do not log client objects, URLs or
+raw Pydantic diagnostics. Synthetic UUIDs supply task correlation.
+
+JSON-only serializers and strict worker validation reduce deserialization risk; they do
+not authorize publishers. The sole task performs no domain mutation. Bounded key TTLs,
+queue backlog, reply retention, pools and retries limit resource use. RPC results are
+disposable, never financial/task ledgers. Future business consumers need explicit broker
+permissions, idempotency and dead-letter/replay ownership. Private local services retain
+development credentials and unencrypted transport; production TLS, ACL provisioning and
+topology remain future work. See [operations](ASYNC_INFRASTRUCTURE.md).

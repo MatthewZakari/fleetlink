@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleetlink.core.config import Settings
 from fleetlink.infrastructure.database import Database
+from fleetlink.infrastructure.redis import TechnicalRedis
 
 
 def get_settings(request: Request) -> Settings:
@@ -25,6 +26,13 @@ def get_database(request: Request) -> Database:
     if database is None:
         raise RuntimeError("Database resources are disabled or outside application lifespan")
     return database
+
+
+def get_redis(request: Request) -> TechnicalRedis:
+    redis: TechnicalRedis | None = request.app.state.redis
+    if redis is None:
+        raise RuntimeError("Redis resources are disabled or outside application lifespan")
+    return redis
 
 
 async def get_session(
