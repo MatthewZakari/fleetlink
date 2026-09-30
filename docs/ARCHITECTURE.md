@@ -82,3 +82,18 @@ and unrelated objects. Reviewed manual migrations are required for intentional t
 These choices implement the prescribed SQLAlchemy/Alembic architecture and FL-005 extension
 policy; no significant architectural deviation or new context ownership requires an ADR.
 See [database operations](DATABASE.md#fl-005-persistence-foundation).
+
+## FL-006 implementation boundary
+
+The existing API lifespan owns an optional lazy async Redis adapter and bounded pool.
+Native DI exposes UUID-addressed TTL-bound operations; Redis holds no durable domain state.
+The shared backend package composes a separate prefork Celery worker and synchronous producer.
+RabbitMQ is the sole broker; only a strict technical probe is registered. No FastAPI worker
+startup, domain event, outbox, scheduler or SQL schema is added.
+
+JSON-only serialization, bounded retries, late acknowledgements, publisher confirms and
+short-lived RabbitMQ RPC results provide diagnostics, not exactly-once execution or durable
+business completion. The bounded RPC subclass is recorded in
+[proposed ADR-0001](ADR/0001-technical-task-completion.md). API probes and FL-005 database
+lifecycle remain compatible. [Operations](ASYNC_INFRASTRUCTURE.md) covers configuration,
+resource limits, failure recovery, compatibility warnings and rollback.

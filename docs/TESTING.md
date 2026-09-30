@@ -91,3 +91,68 @@ Required regressions remain `make api-test`, `make api-lint`, `make api-typechec
 `make infra-config`, `python3 infrastructure/docker/test_validate.py`,
 `make mobile-analyze` and `make mobile-test`. Record failures/unavailable checks separately;
 mocked lifecycle tests do not establish PostgreSQL integration success.
+
+## FL-006 broker validation
+
+`make api-test` still selects infrastructure-free `tests/`, including Redis/Celery tests.
+`make api-test-tasks` selects `tests/test_broker.py` alone. They cover immutable settings,
+safe credentials/URLs, disabled resources, independent apps/pools, partial-startup cleanup,
+cancellation, sanitized failures, strict payloads, retry bounds and safe logs. Neither
+mocked calls nor pure task execution are claimed as integration evidence. Strict mypy
+includes `src tests tests_db tests_broker migrations`; Ruff includes all API Python files.
+
+Run the real suite explicitly against the existing private development services:
+
+```sh
+make infra-up
+make api-test-broker
+```
+
+The target sets `FLEETLINK_BROKER_TESTS=1` and a 180-second outer deadline. Direct pytest
+requires that opt-in. Missing services fail clearly, never skip. To load custom `.env`:
+
+```sh
+FLEETLINK_BROKER_TESTS=1 timeout --kill-after=10s 180s \
+  uv run --env-file .env --project apps/api --locked pytest apps/api/tests_broker
+```
+
+Python must reach both services. In this Linux Codespace, reachable private container
+addresses can be discovered for one invocation (never commit those addresses):
+
+```sh
+FLEETLINK_REDIS_HOST=$(docker inspect fleetlink-local-redis-1 --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}') \
+FLEETLINK_RABBITMQ_HOST=$(docker inspect fleetlink-local-rabbitmq-1 --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}') \
+  make api-test-broker
+```
+
+This is not universally reachable with Docker-outside-of-Docker. Otherwise run from the
+daemon host or an authorized environment on `fleetlink-local-network` with `redis` and
+`rabbitmq` DNS names and internal ports 6379/5672. Keep loopback publications private.
+Use the actual configured credentials, without logging values.
+
+Each run generates new UUID task queues/direct exchanges and namespaced Redis/reply keys.
+It checks Redis PING, set/get, observed TTL expiry, exact deletion, connection cleanup,
+refused connections and rejected ACL identity. It publishes without a worker and requires
+a completion timeout, starts a real prefork subprocess, then verifies the deterministic
+result, two bounded retries, exhaustion on attempt 3, rejection on attempt 1, graceful
+TERM, and queued work completing after worker restart. Separate checks reject invalid
+RabbitMQ credentials and exercise a stalled TCP/AMQP handshake. A test-only TCP proxy
+forwards an actual publish but withholds its confirmation: the producer must time out
+while a passive real-broker check observes the accepted message. This proves uncertainty,
+not successful completion.
+
+Completion uses polled broker state under deadlines, not a sleep as proof. Redis expiry
+polling likewise observes the key disappear. Tests preserve an unrelated sentinel key/queue
+while deleting only their exact resources, then remove their own sentinels. They do not
+purge shared queues, flush Redis, change ACLs, reset volumes or touch PostgreSQL. Prefork
+workers get 20 seconds to shut down; a forced kill fails the test. Repeated runs cannot
+reuse old task IDs/results. A hard-killed suite can leave a durable UUID task queue/exchange;
+inspect and delete only that exact recorded name, never the standard development queue.
+Reply queues expire after 60 seconds and Redis keys after their bounded TTL.
+
+CI remains infrastructure-free; it does not claim broker coverage. Record explicit
+`make api-test-broker` evidence separately. Run the unchanged FL-005 setup/test/drop
+workflow to verify PostgreSQL/Alembic when available. Required adjacent checks remain
+`make infra-config`, `python3 infrastructure/docker/test_validate.py`, `make mobile-analyze`,
+`make mobile-test`, backend tests/lint/types and `git diff --check`. See
+[operational limits and rollback](ASYNC_INFRASTRUCTURE.md).

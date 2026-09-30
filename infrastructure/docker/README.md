@@ -2,8 +2,9 @@
 
 This optional development stack provisions PostgreSQL/PostGIS, Redis and RabbitMQ.
 The API still starts and passes its tests without these services; `/health` and
-`/ready` remain application-only. FL-005 adds an opt-in application PostgreSQL adapter. No domain tables, workers,
-queues or business exchanges are configured. PostGIS may create its own extension
+`/ready` remain application-only. FL-005 adds an opt-in PostgreSQL adapter. FL-006 adds
+separately invoked technical Celery workers/queues and opt-in Redis access; no business
+exchange or domain table is configured. PostGIS may create its own extension
 objects; RabbitMQ creates its standard built-in broker objects.
 
 ## Quick start
@@ -179,3 +180,25 @@ PostGIS provisioning remains privileged infrastructure work, never application m
 DDL. Local administrator/migration/runtime identities are shared only for development.
 Production role separation, TLS and grants are deferred. Neither API probes nor engine
 construction verify database health. Existing `validate.sh` behavior is unchanged.
+
+## FL-006 Redis and RabbitMQ/Celery
+
+The existing services, credentials, ports and volumes are unchanged. Run `make infra-up`,
+then the [worker and producer commands](../../docs/ASYNC_INFRASTRUCTURE.md#worker-and-producer-commands).
+The API's Redis adapter is opt-in; the dedicated worker requires explicit Celery enablement.
+RabbitMQ is the sole broker. Redis stores only TTL-bound technical keys. The bounded RPC
+backend carries disposable completion results on RabbitMQ, never a durable task ledger.
+
+`make api-test-broker` starts its own real workers and cleans only fresh UUID-named FL-006
+queues/exchanges/keys. It never purges shared queues, flushes Redis or resets volumes.
+An interrupted run can leave an empty test task queue/exchange; remove only its exact
+recorded name after checking consumers. Keys/replies expire automatically. See
+[integration procedure](../../docs/TESTING.md#fl-006-broker-validation) and
+[shutdown, failure recovery and rollback](../../docs/ASYNC_INFRASTRUCTURE.md).
+
+On Codespaces, devcontainer loopback may not reach daemon-host publications. On a reachable
+Linux bridge, dynamically inspect the Redis/RabbitMQ container addresses as documented in
+the test procedure. Addresses change on recreation; never commit or hardcode them. Otherwise
+run on the daemon host or an authorized runtime on `fleetlink-local-network`, using DNS
+`redis:6379` and `rabbitmq:5672`. Do not broaden bindings to `0.0.0.0`. No new listener,
+network, container image or production topology is introduced.
