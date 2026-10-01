@@ -98,3 +98,16 @@ parameters, keys, values or credentials. Celery uses standard W3C transport head
 payload changes. See [configuration, ownership, privacy, dependency rationale and rollback](../../docs/OBSERVABILITY.md).
 `make api-test-observability` selects infrastructure-free telemetry contracts; existing CI
 already covers the new modules/tests. No collector or external SaaS is installed.
+
+## FL-008 configuration security foundation
+
+Frozen settings and existing `SecretStr` fields now use an injectable environment snapshot
+source. Credential repr/JSON, rejected validation inputs and controlled diagnostics are
+sanitized. Use `Settings.diagnostic_configuration()` and `connection_target()` rather than
+raw settings/client internals or connection URLs. Enabled staging/production database and
+broker clients reject development defaults. Local/test defaults remain compatible.
+
+`make api-test-secrets` selects the dedicated infrastructure-free regressions. CI also scans
+full Git history and the working tree with checksum-pinned Gitleaks 8.30.1; run
+`make secret-scan` locally. No Python dependency or lockfile change is introduced.
+See [source injection, classification, rotation and limits](../../docs/SECRETS.md).

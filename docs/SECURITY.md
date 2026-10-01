@@ -79,3 +79,14 @@ exception message/stack capture is enabled. Collector access, TLS/egress, reside
 retention and upstream sampling trust require production review before enabling export.
 No production credentials, collector or SaaS integration is introduced. See
 [the complete privacy/cardinality policy and limitations](OBSERVABILITY.md).
+
+## FL-008 implemented configuration boundary
+
+Current database/broker credentials, optional Redis ACL credentials and the sensitive OTLP
+origin are explicitly classified. Representation and structured validation diagnostics mask
+secret inputs. Scoped redaction and structural event/header allowlists protect controlled
+logs and Problems; driver error messages remain omitted. CI scans Git history and working
+files using the checksum-pinned MIT Gitleaks CLI 8.30.1, with no directory exclusions.
+[Secrets operations](SECRETS.md) defines local defaults, production validation, rotation,
+incident response, rollback and precise limitations. These protections do not secure process
+memory, external debug handlers or arbitrary direct SDK calls.

@@ -15,6 +15,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from fleetlink.core.logging import correlation_id, request_log_level
+from fleetlink.core.secrets import Redactor, active_redactor
 
 logger = logging.getLogger("fleetlink.http")
 SAFE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", re.ASCII)
@@ -54,7 +55,16 @@ async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
     )
     # Preserve protocol headers such as Allow without exposing exception details.
     if exc.headers:
-        response.headers.update(exc.headers)
+        # Only transport protocol fields are permitted, never arbitrary exception headers.
+        allow = exc.headers.get("Allow")
+        if allow and all(
+            method.strip() in {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
+            for method in allow.split(",")
+        ):
+            response.headers["Allow"] = ", ".join(method.strip() for method in allow.split(","))
+        retry = exc.headers.get("Retry-After")
+        if retry and retry.isascii() and retry.isdigit() and len(retry) <= 6:
+            response.headers["Retry-After"] = retry
     return response
 
 
@@ -67,7 +77,10 @@ async def validation_error(request: Request, exc: RequestValidationError) -> JSO
 class RequestContextMiddleware:
     """Pure ASGI middleware preserves context and covers unhandled pre-response failures."""
 
-    def __init__(self, app: ASGIApp, log_level: str = "INFO") -> None:
+    def __init__(
+        self, app: ASGIApp, log_level: str = "INFO", redactor: Redactor | None = None
+    ) -> None:
+        self.redactor = redactor if redactor is not None else Redactor()
         self.app = app
         self.log_level = logging.getLevelNamesMapping()[log_level]
 
@@ -75,9 +88,14 @@ class RequestContextMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        redactor_token = active_redactor.set(self.redactor)
         values = Headers(scope=scope).getlist("x-correlation-id")
         supplied = values[0] if len(values) == 1 else ""
-        request_id = supplied if SAFE_ID.fullmatch(supplied) else str(uuid4())
+        request_id = (
+            supplied
+            if SAFE_ID.fullmatch(supplied) and active_redactor.get().text(supplied) == supplied
+            else str(uuid4())
+        )
         scope.setdefault("state", {})["correlation_id"] = request_id
         token = correlation_id.set(request_id)
         level_token = request_log_level.set(self.log_level)
@@ -118,11 +136,12 @@ class RequestContextMiddleware:
             finally:
                 correlation_id.reset(token)
                 request_log_level.reset(level_token)
+                active_redactor.reset(redactor_token)
 
 
-def register_http(app: FastAPI, log_level: str) -> None:
+def register_http(app: FastAPI, log_level: str, redactor: Redactor | None = None) -> None:
     """Keep technical transport composition in one place."""
-    app.add_middleware(RequestContextMiddleware, log_level=log_level)
+    app.add_middleware(RequestContextMiddleware, log_level=log_level, redactor=redactor)
     app.add_exception_handler(HTTPException, http_error)  # type: ignore[arg-type]
     app.add_exception_handler(RequestValidationError, validation_error)  # type: ignore[arg-type]
 

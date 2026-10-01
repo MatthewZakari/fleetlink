@@ -62,6 +62,7 @@ class Telemetry:
         span_exporter: SpanExporter | None = None,
         metric_reader: MetricReader | None = None,
     ) -> None:
+        self.redactor = settings.redactor()
         self._closed = False
         self._timeout_ms = max(1, int(settings.otel_export_timeout_seconds * 1000))
         self.traces: TracerProvider | None = None
@@ -71,7 +72,7 @@ class Telemetry:
         except PackageNotFoundError:
             service_version = None
         resource_attributes = {
-            "service.name": service,
+            "service.name": self.redactor.text(service),
             "deployment.environment.name": settings.environment,
         }
         if service_version is not None:
@@ -170,10 +171,12 @@ class Telemetry:
     ) -> Iterator[trace.Span]:
         # SDK default exception events contain exception messages and stack traces.
         with self.tracer.start_as_current_span(
-            name,
+            self.redactor.text(name),
             kind=kind,
             context=parent,
-            attributes=attributes,
+            attributes={key: self.redactor.text(value) for key, value in attributes.items()}
+            if attributes
+            else None,
             record_exception=False,
             set_status_on_exception=False,
         ) as span:
@@ -185,6 +188,7 @@ class Telemetry:
 
     @contextmanager
     def task(self, headers: Mapping[str, object] | None, name: str) -> Iterator[None]:
+        name = self.redactor.text(name)
         start = perf_counter()
         outcome = "success"
         with self.operation(

@@ -3,12 +3,20 @@
 import os
 import re
 from ipaddress import IPv6Address
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import quote, urlsplit
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
+
+from fleetlink.core.secrets import (
+    SECRET_FIELDS,
+    EnvironmentSecretSource,
+    Redactor,
+    SecretSource,
+    sanitized_validation,
+)
 
 
 def reject_otel_overrides() -> None:
@@ -21,6 +29,70 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="FLEETLINK_", extra="ignore", frozen=True, hide_input_in_errors=True
     )
+
+    def __init__(self, *, secret_source: SecretSource | None = None, **values: Any) -> None:
+        source = secret_source if secret_source is not None else EnvironmentSecretSource()
+        for field in sorted(SECRET_FIELDS):
+            if field not in values:
+                resolved = source.resolve(f"FLEETLINK_{field.upper()}")
+                values[field] = (
+                    resolved if resolved is not None else type(self).model_fields[field].default
+                )
+        try:
+            super().__init__(**values)
+        except ValidationError as error:
+            raise sanitized_validation(error, type(self).__name__) from None
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        try:
+            super().__setattr__(name, value)
+        except ValidationError as error:
+            raise sanitized_validation(error, type(self).__name__) from None
+
+    @model_validator(mode="after")
+    def validate_required_credentials(self) -> "Settings":
+        for enabled, fields in (
+            (self.database_enabled, ("postgres_user", "postgres_password")),
+            (self.celery_enabled, ("rabbitmq_user", "rabbitmq_password")),
+        ):
+            if enabled:
+                for field in fields:
+                    value = getattr(self, field).get_secret_value()
+                    if not value or (
+                        self.environment in ("staging", "production")
+                        and value
+                        in (
+                            "fleetlink_dev",
+                            "development-only-postgres",
+                            "development-only-rabbitmq",
+                        )
+                    ):
+                        raise ValueError(
+                            f"Enabled infrastructure requires explicit {field} configuration"
+                        )
+        return self
+
+    def redactor(self) -> Redactor:
+        return Redactor(
+            tuple(
+                value
+                for name in sorted(SECRET_FIELDS)
+                if isinstance((value := getattr(self, name)), SecretStr)
+            )
+        )
+
+    def diagnostic_configuration(self) -> dict[str, object]:
+        """Explicit diagnostic projection; never unwrap credentials."""
+        return {
+            name: "<redacted>" if name in SECRET_FIELDS else getattr(self, name)
+            for name in type(self).model_fields
+        }
+
+    def connection_target(self, service: Literal["postgres", "redis", "rabbitmq"]) -> str:
+        port = (
+            self.rabbitmq_amqp_port if service == "rabbitmq" else getattr(self, f"{service}_port")
+        )
+        return f"{service}://{getattr(self, f'{service}_host')}:{port}"
 
     environment: Literal["local", "test", "staging", "production"] = "local"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"

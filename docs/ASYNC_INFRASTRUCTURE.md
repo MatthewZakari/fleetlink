@@ -204,3 +204,15 @@ after fork and closed on child shutdown. Export is separately opt-in and default
 collector failure is auxiliary and cannot fail a task or become a readiness dependency.
 No broker URL, queue UUID suffix, payload or task ID becomes a metric/span dimension.
 See [observability](OBSERVABILITY.md) and the unchanged [ADR-0001](ADR/0001-technical-task-completion.md).
+
+## FL-008 credentials and rotation
+
+Existing Redis ACL and RabbitMQ credential variable names are preserved and typed as
+`SecretStr`. Secret-source resolution snapshots configuration once; no provider lookup,
+background refresh or worker polling is introduced. Enabled staging/production broker clients
+reject development defaults. Empty enabled RabbitMQ credentials fail with a field-specific
+sanitized diagnostic. Broker connection setup and producer/worker cleanup suppress known
+transport messages; worker library diagnostics retain the structural JSON boundary.
+Rotate by draining and recreating clients/workers with new settings, then retiring old
+credentials. RabbitMQ-only routing, bounded RPC completion and value-42 probe behavior remain.
+See [source ownership, credential policy and rollback](SECRETS.md).

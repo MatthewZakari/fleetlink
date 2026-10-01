@@ -9,6 +9,8 @@ help:
 	@echo "api-install     Install locked Python dependencies"
 	@echo "api-run         Run the bootstrap API locally"
 	@echo "api-test        Run infrastructure-free backend tests"
+	@echo "api-test-secrets Run infrastructure-free FL-008 security regressions"
+	@echo "secret-scan     Scan Git history and working tree with Gitleaks 8.30.1"
 	@echo "api-test-observability Run infrastructure-free OpenTelemetry contracts"
 	@echo "api-test-db     Run explicit isolated PostgreSQL tests"
 	@echo "api-worker      Start dedicated technical Celery worker (explicit opt-in)"
@@ -77,3 +79,12 @@ api-test-broker:
 	FLEETLINK_BROKER_TESTS=1 timeout --kill-after=10s 180s uv run --project apps/api --locked pytest apps/api/tests_broker
 api-task-smoke:
 	uv run --project apps/api --locked python -m fleetlink.technical_smoke
+
+FLEETLINK_GITLEAKS_BIN ?= gitleaks
+.PHONY: api-test-secrets secret-scan
+api-test-secrets:
+	uv run --project apps/api --locked pytest apps/api/tests/test_secrets.py
+secret-scan:
+	@test "$$($(FLEETLINK_GITLEAKS_BIN) version)" = "8.30.1"
+	$(FLEETLINK_GITLEAKS_BIN) git --redact --no-banner .
+	$(FLEETLINK_GITLEAKS_BIN) dir --redact --no-banner .
