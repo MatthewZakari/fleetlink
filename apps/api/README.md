@@ -86,3 +86,15 @@ development-only. Strict mypy covers `src tests tests_db tests_broker migrations
 covers all `apps/api`. `make api-test-tasks` is infrastructure-free; `make api-test-broker`
 uses real services/processes. No endpoints, database mappings, domain jobs or readiness
 dependency checks are added.
+
+## FL-007 observability
+
+Telemetry export is disabled by default and never a readiness dependency. The existing
+factory/lifespan, pure ASGI HTTP context, immutable Settings and JSON sink remain in place.
+Per-instance OpenTelemetry providers add privacy-safe traces and duration metrics; valid
+active spans add trace/span IDs to logs independently of correlation IDs. Worker providers
+start after fork. PostgreSQL events and Redis adapter operations never capture SQL,
+parameters, keys, values or credentials. Celery uses standard W3C transport headers without
+payload changes. See [configuration, ownership, privacy, dependency rationale and rollback](../../docs/OBSERVABILITY.md).
+`make api-test-observability` selects infrastructure-free telemetry contracts; existing CI
+already covers the new modules/tests. No collector or external SaaS is installed.

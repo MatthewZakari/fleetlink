@@ -3,6 +3,11 @@
 FleetLink is a planned production-grade Commerce + Logistics Super App connecting customers, merchants, riders, and administrators through one user identity with multiple roles.
 
 ## Current status
+FL-007 implements an opt-in OpenTelemetry foundation for HTTP/infrastructure tracing,
+Celery transport propagation, technical metrics and trace/log correlation, pending
+independent review. Export is disabled by default; no collector is required for startup
+or tests. See [observability contracts and operations](docs/OBSERVABILITY.md).
+
 FL-006 implements optional Redis and RabbitMQ/Celery technical infrastructure, pending independent review. It adds a dedicated worker and a harmless transport probe, with no business jobs. See [async infrastructure operations](docs/ASYNC_INFRASTRUCTURE.md).
 
 FL-005 adds an optional async PostgreSQL persistence foundation and Alembic technical baseline to the accepted FL-001 through FL-004 foundation. The API implements only /health and /ready plus OpenAPI metadata. The Flutter foundation contains a running screen and Material 3 themes. FL-003 adds optional local PostgreSQL/PostGIS, Redis and RabbitMQ infrastructure. There is no product functionality, domain database schema or production deployment. The only application-managed database object is Alembic revision tracking. Flutter analysis and the three widget/theme tests passed during FL-003 validation; native runner work remains outside this task (see apps/mobile/README.md).
@@ -27,6 +32,7 @@ This is the long-term technology direction. Only bootstrap dependencies listed i
 - [Coding standards](docs/CODING_STANDARDS.md)
 - [Security](docs/SECURITY.md)
 - [Testing](docs/TESTING.md)
+- [Observability](docs/OBSERVABILITY.md)
 - [Architectural decision records](docs/ADR/README.md)
 
 ## Repository conventions

@@ -1,11 +1,20 @@
 """Immutable settings; environment only, never implicit dotenv discovery."""
 
+import os
+import re
+from ipaddress import IPv6Address
 from typing import Literal
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
+
+
+def reject_otel_overrides() -> None:
+    """Upstream ambient configuration must not bypass FleetLink's privacy policy."""
+    if any(key.startswith("OTEL_") for key in os.environ):
+        raise ValueError("Unsupported OpenTelemetry environment override; use FLEETLINK_ settings")
 
 
 class Settings(BaseSettings):
@@ -15,6 +24,63 @@ class Settings(BaseSettings):
 
     environment: Literal["local", "test", "staging", "production"] = "local"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+
+    telemetry_enabled: bool = False
+    otel_exporter_otlp_endpoint: SecretStr | None = Field(default=None, repr=False)
+    otel_export_timeout_seconds: float = Field(default=2, gt=0, le=10, allow_inf_nan=False)
+    otel_sample_ratio: float = Field(default=1, ge=0, le=1, allow_inf_nan=False)
+
+    @field_validator("otel_exporter_otlp_endpoint")
+    @classmethod
+    def validate_otel_endpoint(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None:
+            return None
+        try:
+            raw = value.get_secret_value()
+            parsed = urlsplit(raw)
+            hostname = parsed.hostname or ""
+            if ":" in hostname:
+                IPv6Address(hostname)
+                host_valid = True
+            else:
+                host_valid = (
+                    bool(
+                        re.fullmatch(
+                            r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+                            r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*",
+                            hostname,
+                        )
+                    )
+                    and len(hostname) <= 253
+                )
+            valid = (
+                host_valid
+                and not parsed.netloc.endswith(":")
+                and parsed.scheme in ("http", "https")
+                and parsed.hostname is not None
+                and parsed.username is None
+                and parsed.password is None
+                and not parsed.query
+                and not parsed.fragment
+                and parsed.path in ("", "/")
+                and (parsed.port is None or 1 <= parsed.port <= 65535)
+                and not any(char.isspace() or ord(char) < 32 for char in raw)
+                and not any(char in raw for char in ("\\", "%", "?", "#"))
+            )
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ValueError("OTLP endpoint must be an HTTP(S) origin without credentials or paths")
+        return value
+
+    @model_validator(mode="after")
+    def validate_telemetry(self) -> "Settings":
+        if self.telemetry_enabled:
+            if self.otel_exporter_otlp_endpoint is None:
+                raise ValueError("Enabled telemetry requires FLEETLINK_OTEL_EXPORTER_OTLP_ENDPOINT")
+            # SDK/exporter environment fallbacks can capture secrets or replace ownership.
+            reject_otel_overrides()
+        return self
 
     database_enabled: bool = False
     postgres_host: str = Field(default="127.0.0.1", min_length=1)

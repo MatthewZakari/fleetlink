@@ -25,3 +25,5 @@ Reference the ADR from affected docs and pull requests. A proposed ADR does not 
 
 - [ADR-0001 — Bounded technical task completion](0001-technical-task-completion.md)
   (Proposed for FL-006 independent review).
+- [ADR-0002 — Opt-in OpenTelemetry ownership and privacy](0002-opentelemetry-foundation.md)
+  (Proposed for FL-007 independent review).

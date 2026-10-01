@@ -9,6 +9,7 @@ help:
 	@echo "api-install     Install locked Python dependencies"
 	@echo "api-run         Run the bootstrap API locally"
 	@echo "api-test        Run infrastructure-free backend tests"
+	@echo "api-test-observability Run infrastructure-free OpenTelemetry contracts"
 	@echo "api-test-db     Run explicit isolated PostgreSQL tests"
 	@echo "api-worker      Start dedicated technical Celery worker (explicit opt-in)"
 	@echo "api-test-tasks  Run infrastructure-free Redis/Celery tests"
@@ -32,6 +33,9 @@ api-run:
 	uv run --project apps/api --locked uvicorn fleetlink.main:create_app --factory --no-access-log --no-server-header --no-proxy-headers
 api-test:
 	uv run --project apps/api --locked pytest apps/api/tests
+.PHONY: api-test-observability
+api-test-observability:
+	uv run --project apps/api --locked pytest apps/api/tests/test_observability.py
 api-lint:
 	uv run --project apps/api --locked ruff check apps/api
 	uv run --project apps/api --locked ruff format --check apps/api

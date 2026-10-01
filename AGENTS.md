@@ -2,7 +2,8 @@
 
 ## Scope and authority
 FleetLink is production commerce and logistics software. Accepted FL-001 through FL-003 established the engineering specification, monorepo bootstrap, technical API endpoints, minimal Flutter shell, developer tooling and optional local infrastructure. Implementation is authorized only by the current explicitly scoped engineering task; FL-004 strengthened the FastAPI technical core; FL-005 adds optional async PostgreSQL engine/session infrastructure, Alembic revision tracking and isolated PostgreSQL/PostGIS tests. No domain tables, authentication, marketplace, payments or logistics implementation is authorized.
-FL-006 adds opt-in async Redis, RabbitMQ-backed Celery technical probes, dedicated workers and explicit isolated real-service tests. It awaits independent review; implementation does not imply acceptance. No domain jobs, outbox, scheduler or FL-007 work is authorized.
+FL-006 adds opt-in async Redis, RabbitMQ-backed Celery technical probes, dedicated workers and explicit isolated real-service tests. It awaits independent review; implementation does not imply acceptance. No domain jobs, outbox or scheduler is authorized.
+FL-007 adds opt-in OpenTelemetry tracing/metrics, W3C HTTP/Celery propagation and trace/log correlation with explicit lifecycle ownership and bounded privacy-safe attributes. It awaits independent review; no collector/platform deployment, business analytics or FL-008 work is authorized. See docs/OBSERVABILITY.md.
 The accepted technology and architecture direction is documented in docs/ARCHITECTURE.md. Planned capabilities are not implemented capabilities.
 Read this file before making any change, then README.md and the relevant documents under docs/. Inspect any more specific AGENTS.md instructions in the area being changed.
 

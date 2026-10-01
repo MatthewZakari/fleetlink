@@ -18,6 +18,42 @@ from fleetlink.infrastructure.database import Database, DatabaseError
 TEST_DATABASE = "fleetlink_test_fl005"
 
 
+def test_async_postgres_observability_privacy(settings: Settings) -> None:
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    from fleetlink.observability import Telemetry
+    from fleetlink.observability.database import DatabaseInstrumentation
+
+    async def run() -> None:
+        exporter = InMemorySpanExporter()
+        runtime = Telemetry(settings, "fleetlink-api", span_exporter=exporter)
+        database = Database(settings)
+        instrumentation = DatabaseInstrumentation(database.engine.sync_engine, runtime)
+        try:
+            with runtime.operation("integration") as parent:
+                async with database.connection() as connection:
+                    assert (
+                        await connection.scalar(
+                            text("SELECT CAST(:value AS TEXT)"), {"value": "synthetic-fl007-secret"}
+                        )
+                        == "synthetic-fl007-secret"
+                    )
+            queries = [
+                span for span in exporter.get_finished_spans() if span.name == "postgresql.query"
+            ]
+            assert queries
+            for span in queries:
+                assert span.attributes == {"db.system.name": "postgresql"}
+                assert span.parent == parent.get_span_context()
+                assert span.events == ()
+        finally:
+            instrumentation.close()
+            await database.dispose()
+            runtime.shutdown()
+
+    asyncio.run(run())
+
+
 @pytest.fixture
 def settings() -> Settings:
     if os.environ.get("FLEETLINK_POSTGRES_DB") != TEST_DATABASE:

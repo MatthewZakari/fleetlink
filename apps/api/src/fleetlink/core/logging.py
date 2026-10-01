@@ -6,6 +6,8 @@ import sys
 from contextvars import ContextVar
 from datetime import UTC, datetime
 
+from opentelemetry import trace
+
 request_log_level: ContextVar[int] = ContextVar("request_log_level", default=logging.INFO)
 
 correlation_id: ContextVar[str | None] = ContextVar("correlation_id", default=None)
@@ -22,6 +24,10 @@ class JsonFormatter(logging.Formatter):
             "event": record.getMessage(),
             "correlation_id": correlation_id.get(),
         }
+        active = trace.get_current_span().get_span_context()
+        if active.is_valid:
+            payload["trace_id"] = format(active.trace_id, "032x")
+            payload["span_id"] = format(active.span_id, "016x")
         for field in ("status_code", "duration_ms", "error_type"):
             if hasattr(record, field):
                 payload[field] = getattr(record, field)

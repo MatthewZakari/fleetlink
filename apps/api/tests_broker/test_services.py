@@ -301,3 +301,61 @@ def test_publish_confirmation_timeout_has_uncertain_outcome(settings: Settings) 
                 queue.delete(if_unused=True)
                 Exchange(settings.celery_queue)(connection).delete(if_unused=True)
                 Queue(producer.backend.oid)(connection).delete(if_unused=True)
+
+
+def test_real_worker_w3c_trace_propagation(
+    settings: Settings,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import json
+
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    from fleetlink.observability import Telemetry
+
+    exporter = InMemorySpanExporter()
+    telemetry = Telemetry(settings, "fleetlink-api", span_exporter=exporter)
+    probe = ProbePayload(probe_id=str(uuid4()), value=21, failures_before_success=1)
+    # Explicit worker export to a refused loopback port proves collector failure isolation.
+    with socket.socket() as reserved:
+        reserved.bind(("127.0.0.1", 0))
+        monkeypatch.setenv("FLEETLINK_TELEMETRY_ENABLED", "true")
+        monkeypatch.setenv(
+            "FLEETLINK_OTEL_EXPORTER_OTLP_ENDPOINT",
+            f"http://127.0.0.1:{reserved.getsockname()[1]}",
+        )
+        monkeypatch.setenv("FLEETLINK_OTEL_EXPORT_TIMEOUT_SECONDS", "0.2")
+        producer = TechnicalProducer(settings, telemetry=telemetry)
+        log = tmp_path / "worker-tracing.log"
+        try:
+            with worker(settings, log):
+                result = producer.publish(probe)
+                assert producer.wait(result)["attempts"] == 2
+            span = exporter.get_finished_spans()[0]
+            assert span.context is not None
+            expected = format(span.context.trace_id, "032x")
+            events = []
+            for line in log.read_text().splitlines():
+                if line.startswith("{"):
+                    entry = json.loads(line)
+                    if entry.get("event") == "technical_task_started":
+                        events.append(entry)
+            assert len(events) == 2
+            for entry in events:
+                assert entry["trace_id"] == expected
+                assert entry["correlation_id"] == probe.probe_id
+                assert entry["service"] == "fleetlink-worker"
+                assert len(entry["span_id"]) == 16
+            assert events[0]["span_id"] != events[1]["span_id"]
+            assert "telemetry_export_failed" in log.read_text()
+        finally:
+            producer.close()
+            telemetry.shutdown()
+            with (
+                safe_broker_errors(producer.app),
+                producer.app.connection_for_write() as connection,
+            ):
+                Queue(settings.celery_queue)(connection).delete(if_unused=True, if_empty=True)
+                Exchange(settings.celery_queue)(connection).delete(if_unused=True)
+                Queue(producer.backend.oid)(connection).delete(if_unused=True)

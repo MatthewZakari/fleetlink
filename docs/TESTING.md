@@ -156,3 +156,23 @@ workflow to verify PostgreSQL/Alembic when available. Required adjacent checks r
 `make infra-config`, `python3 infrastructure/docker/test_validate.py`, `make mobile-analyze`,
 `make mobile-test`, backend tests/lint/types and `git diff --check`. See
 [operational limits and rollback](ASYNC_INFRASTRUCTURE.md).
+
+## FL-007 observability validation
+
+`make api-test` still requires no services or collector. `make api-test-observability`
+selects in-memory trace/metric and mocked OTLP contracts: default disablement, endpoint
+and numeric validation, resource identity, W3C continuation/malformed headers, payload-free
+Celery propagation, retries, log correlation/concurrency, safe metrics/route templates,
+privacy, sampling, cancellation, repeated lifespans, child lifecycle, exporter failures
+and bounded shutdown. A SQLite event fixture checks listeners only and does not replace
+PostgreSQL integration. Ruff/format/strict mypy/pytest already cover every new directory.
+
+The unchanged isolated FL-005 setup/test/drop commands above also exercise async PostgreSQL
+query instrumentation without SQL/parameter capture. The existing `make api-test-broker`
+also checks real RabbitMQ-to-prefork-worker W3C trace continuity across a retry, observing
+worker log trace IDs against the producer's in-memory span. That test enables export only
+to a deliberately refused loopback port, proving completion and cleanup survive collector
+failure without contacting an external backend. Queue/exchange/reply cleanup stays exact
+and isolated. Preserve development volumes and clean up the test database and workers.
+These checks establish neither successful collector/backend interoperability nor production
+monitoring readiness. See [observability operations and limitations](OBSERVABILITY.md).

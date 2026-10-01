@@ -59,3 +59,23 @@ disposable, never financial/task ledgers. Future business consumers need explici
 permissions, idempotency and dead-letter/replay ownership. Private local services retain
 development credentials and unencrypted transport; production TLS, ACL provisioning and
 topology remain future work. See [operations](ASYNC_INFRASTRUCTURE.md).
+
+## FL-007 telemetry exfiltration boundary
+
+Opt-in telemetry export is an information-exfiltration boundary, independent of request
+and task authorization. Allowlist source-defined route templates, bounded method/status
+classes, fixed task names/outcomes and dependency systems only. Never capture authorization
+headers, cookies, tokens/JWTs, bodies, customer payloads, SQL text/parameters, Redis
+keys/values, broker credentials or full connection URLs. Trace IDs support correlation,
+not identity or access control. Do not copy baggage or arbitrary span attributes into logs.
+Tracestate/baggage are dropped; correlation IDs remain a separate existing log contract.
+
+Exporter endpoint credentials/query/path are rejected; endpoint repr and formatted
+configuration failures hide inputs. Do not log raw validation error dictionaries.
+Native OTEL overrides are rejected when enabled to prevent implicit capture, credentials,
+resource metadata or exporter changes. Exporter/SDK failure diagnostics are sanitized and
+rate-limited within the telemetry boundary; unrelated warnings remain visible. No automatic
+exception message/stack capture is enabled. Collector access, TLS/egress, residency,
+retention and upstream sampling trust require production review before enabling export.
+No production credentials, collector or SaaS integration is introduced. See
+[the complete privacy/cardinality policy and limitations](OBSERVABILITY.md).
