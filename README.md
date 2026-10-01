@@ -3,6 +3,11 @@
 FleetLink is a planned production-grade Commerce + Logistics Super App connecting customers, merchants, riders, and administrators through one user identity with multiple roles.
 
 ## Current status
+
+FL-008 adds classified secret settings, an environment snapshot source, scoped diagnostic
+redaction and checksum-pinned CI secret scanning, pending independent review. See
+[secrets operations](docs/SECRETS.md). No identity/provider functionality is added.
+
 FL-007 implements an opt-in OpenTelemetry foundation for HTTP/infrastructure tracing,
 Celery transport propagation, technical metrics and trace/log correlation, pending
 independent review. Export is disabled by default; no collector is required for startup
@@ -94,7 +99,7 @@ cd apps/api
 uv run --locked mypy src tests tests_db tests_broker migrations
 ```
 
-`make help` lists equivalent root targets. The minimal GitHub Actions workflow runs locked backend install, lint/format, type checks and tests only; it does not deploy anything.
+`make help` lists equivalent root targets. GitHub Actions runs locked backend install, lint/format, type checks, tests and checksum-pinned secret scans; it does not deploy anything.
 See [API configuration and dependency rationale](apps/api/README.md), including the warning-free httpx2 test client and why pytest-asyncio is unnecessary.
 
 ## Mobile setup and validation

@@ -107,3 +107,13 @@ cleanup; no global providers or domain telemetry are introduced. Narrow native
 instrumentation enforces safe, low-cardinality capture and preserves all FL-004 through
 FL-006 contracts. The collector remains auxiliary and is not a readiness dependency.
 See [observability](OBSERVABILITY.md) and [proposed ADR-0002](ADR/0002-opentelemetry-foundation.md).
+
+## FL-008 implementation boundary
+
+Platform retains frozen Settings and typed `SecretStr` credentials, with a narrow synchronous
+`SecretSource` port and environment snapshot adapter. Resolution happens at settings construction
+without filesystem/network discovery. Application consumers receive settings; clients capture
+credentials at their existing infrastructure boundaries. Explicitly owned request/lifespan/worker
+redaction contexts avoid process-global credential registries. Rotation requires drained client
+recreation or process restart. No identity context, provider SDK or deployment work is added.
+See [operations](SECRETS.md) and [proposed ADR-0003](ADR/0003-secrets-configuration-boundary.md).

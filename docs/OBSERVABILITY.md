@@ -247,3 +247,14 @@ Sources: [API metadata](https://pypi.org/project/opentelemetry-api/),
 [SQLAlchemy instrumentation](https://opentelemetry-python-contrib.readthedocs.io/en/latest/instrumentation/sqlalchemy/sqlalchemy.html),
 [Redis instrumentation](https://opentelemetry-python-contrib.readthedocs.io/en/latest/instrumentation/redis/redis.html),
 [Celery lifecycle](https://opentelemetry-python-contrib.readthedocs.io/en/latest/instrumentation/celery/celery.html).
+
+## FL-008 diagnostic hardening
+
+The existing sensitive OTLP origin remains a `SecretStr`; no credential-bearing exporter
+headers are added. Per-settings redaction removes known raw/URL-encoded credentials from
+FleetLink operation names/attributes, task labels and service resource names. Automatic
+exception events stay disabled; fixed metric names and FL-007 bounded capture are preserved.
+Log formatters accept registered events and reviewed exception names without formatting
+settings, payloads or exception messages. Trace/correlation IDs retain their existing ownership.
+See [secrets policy and direct-SDK/debug limitations](SECRETS.md); export remains disabled by
+default, infrastructure-independent and auxiliary to readiness.

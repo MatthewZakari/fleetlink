@@ -16,6 +16,7 @@ from fleetlink.core.readiness import (
     ReadinessResponse,
     get_readiness,
 )
+from fleetlink.core.secrets import redaction_scope
 from fleetlink.infrastructure.database import Database
 from fleetlink.infrastructure.redis import TechnicalRedis
 from fleetlink.observability import Telemetry
@@ -35,6 +36,7 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         configure_logging()
         async with AsyncExitStack() as resources:
+            resources.enter_context(redaction_scope(settings.redactor()))
             try:
                 telemetry = telemetry_factory(settings, "fleetlink-api")
                 app.state.telemetry = telemetry
@@ -79,7 +81,7 @@ def create_app(
     app.state.database = None
     app.state.redis = None
     app.state.telemetry = None
-    register_http(app, settings.log_level)
+    register_http(app, settings.log_level, settings.redactor())
     app.add_middleware(TelemetryMiddleware)
 
     @app.get("/health", response_model=HealthResponse, tags=["technical"])

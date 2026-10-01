@@ -255,7 +255,7 @@ def test_structured_failure_logging() -> None:
             )
         payloads = [json.loads(line) for line in stream.getvalue().splitlines()]
         assert [item["event"] for item in payloads] == [
-            "fixture_event",
+            "application_event",
             "request_failed",
             "request_completed",
         ]

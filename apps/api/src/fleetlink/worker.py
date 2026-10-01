@@ -4,10 +4,12 @@ import logging
 import sys
 
 from celery import signals
+from kombu.exceptions import OperationalError
 
 from fleetlink.core.config import Settings
 from fleetlink.core.logging import JsonFormatter, configure_logging
-from fleetlink.infrastructure.broker import create_celery
+from fleetlink.core.secrets import redaction_scope
+from fleetlink.infrastructure.broker import BrokerError, create_celery
 from fleetlink.observability import Telemetry, TelemetrySlot
 
 
@@ -43,6 +45,11 @@ def configure_worker_logging(**kwargs: object) -> None:
 
 def main() -> None:
     settings = Settings()
+    with redaction_scope(settings.redactor()):
+        run_worker(settings)
+
+
+def run_worker(settings: Settings) -> None:
     telemetry = TelemetrySlot()
     app = create_celery(settings, telemetry=telemetry)
 
@@ -74,7 +81,10 @@ def main() -> None:
         signals.worker_process_init.disconnect(initialize_telemetry)
         signals.worker_process_shutdown.disconnect(shutdown_telemetry)
         signals.setup_logging.disconnect(configure_worker_logging)
-        app.close()
+        try:
+            app.close()
+        except (OperationalError, OSError):
+            raise BrokerError("RabbitMQ worker cleanup failed") from None
 
 
 if __name__ == "__main__":

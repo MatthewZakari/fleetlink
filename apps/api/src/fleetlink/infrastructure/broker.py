@@ -175,14 +175,13 @@ def create_celery(
 @contextmanager
 def safe_broker_errors(app: Celery) -> Iterator[None]:
     # Use the selected transport's concrete exception families. Programming errors propagate.
-    with app.connection_for_write() as connection:
-        transport_errors = (
-            (OperationalError, OSError) + connection.connection_errors + connection.channel_errors
-        )
-        try:
+    transport_errors: tuple[type[BaseException], ...] = (OperationalError, OSError)
+    try:
+        with app.connection_for_write() as connection:
+            transport_errors += connection.connection_errors + connection.channel_errors
             yield
-        except transport_errors:
-            raise BrokerError("RabbitMQ operation failed; outcome may be uncertain") from None
+    except transport_errors:
+        raise BrokerError("RabbitMQ operation failed; outcome may be uncertain") from None
 
 
 class TechnicalProducer:
@@ -263,10 +262,12 @@ class TechnicalProducer:
                     self.backend.binding(connection).delete(if_unused=True)
         finally:
             try:
-                self._connections.force_close_all()
+                with safe_broker_errors(self.app):
+                    self._connections.force_close_all()
             finally:
                 try:
-                    self.app.close()
+                    with safe_broker_errors(self.app):
+                        self.app.close()
                 finally:
                     if self._owns_telemetry and self.telemetry is not None:
                         self.telemetry.shutdown()

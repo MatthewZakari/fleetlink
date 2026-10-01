@@ -202,3 +202,16 @@ the test procedure. Addresses change on recreation; never commit or hardcode the
 run on the daemon host or an authorized runtime on `fleetlink-local-network`, using DNS
 `redis:6379` and `rabbitmq:5672`. Do not broaden bindings to `0.0.0.0`. No new listener,
 network, container image or production topology is introduced.
+
+## FL-008 local credential policy
+
+Compose still uses explicit root `.env` or `.env.example`; the API never discovers dotenv
+files implicitly. The example values are development-only placeholders and `.env` remains
+ignored. API/worker staging and production settings reject those defaults for enabled database
+and broker clients. This does not convert Compose into a production deployment.
+
+Credential changes require coordinated server configuration and drained/recreated clients;
+editing a process environment cannot update existing pools. Preserve development volumes and
+the existing isolated database setup/drop discipline. Run `make secret-scan` with verified
+Gitleaks 8.30.1 before committing. See [secrets operations](../../docs/SECRETS.md) for source
+loading, rotation, incident response and limitations.

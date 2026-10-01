@@ -176,3 +176,17 @@ failure without contacting an external backend. Queue/exchange/reply cleanup sta
 and isolated. Preserve development volumes and clean up the test database and workers.
 These checks establish neither successful collector/backend interoperability nor production
 monitoring readiness. See [observability operations and limitations](OBSERVABILITY.md).
+
+## FL-008 secrets validation
+
+Run `make api-test-secrets` without services. Generated fake sentinels exercise typed repr,
+settings/validation JSON, injected environment snapshots and absent credentials, safe targets,
+driver/broker failures, worker shutdown, structured logs, seven-field Problems and headers,
+OTel span/event/resource/metric capture, rotation snapshots and concurrent context isolation.
+The suite asserts that known in-memory sentinels never appear in captured diagnostic surfaces.
+It is also included in `make api-test`; keep the observability and real-service suites above.
+
+Run `make secret-scan` with Gitleaks 8.30.1 (or set `FLEETLINK_GITLEAKS_BIN` to its binary).
+Both history and working-tree scans redact findings. Fixtures need no scanner allowlist.
+See [classification, scanner installation and limits](SECRETS.md). Database integration still
+requires fresh `fleetlink_test_fl005`, explicit setup/drop and cleanup verification.

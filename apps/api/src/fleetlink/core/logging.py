@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 
 from opentelemetry import trace
 
+from fleetlink.core.secrets import active_redactor, safe_error_type, safe_event
+
 request_log_level: ContextVar[int] = ContextVar("request_log_level", default=logging.INFO)
 
 correlation_id: ContextVar[str | None] = ContextVar("correlation_id", default=None)
@@ -21,8 +23,10 @@ class JsonFormatter(logging.Formatter):
             .replace("+00:00", "Z"),
             "level": record.levelname,
             "service": "fleetlink-api",
-            "event": record.getMessage(),
-            "correlation_id": correlation_id.get(),
+            "event": safe_event(record.msg, record.args),
+            "correlation_id": active_redactor.get().text(identifier)
+            if (identifier := correlation_id.get())
+            else None,
         }
         active = trace.get_current_span().get_span_context()
         if active.is_valid:
@@ -30,7 +34,11 @@ class JsonFormatter(logging.Formatter):
             payload["span_id"] = format(active.span_id, "016x")
         for field in ("status_code", "duration_ms", "error_type"):
             if hasattr(record, field):
-                payload[field] = getattr(record, field)
+                value = getattr(record, field)
+                if field == "error_type":
+                    payload[field] = safe_error_type(value)
+                elif type(value) in (int, float):
+                    payload[field] = value
         return json.dumps(payload)
 
 

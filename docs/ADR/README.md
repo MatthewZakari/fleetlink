@@ -27,3 +27,6 @@ Reference the ADR from affected docs and pull requests. A proposed ADR does not 
   (Proposed for FL-006 independent review).
 - [ADR-0002 — Opt-in OpenTelemetry ownership and privacy](0002-opentelemetry-foundation.md)
   (Proposed for FL-007 independent review).
+
+- [ADR-0003 — Secret configuration source and diagnostic boundaries](0003-secrets-configuration-boundary.md)
+  (Proposed for FL-008 independent review).
