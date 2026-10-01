@@ -193,3 +193,14 @@ Sources: [Celery configuration](https://docs.celeryq.dev/en/stable/userguide/con
 [redis-py asyncio](https://redis.readthedocs.io/en/stable/examples/asyncio_examples.html),
 [Celery typing project](https://github.com/sbdchd/celery-types).
 See [ADR-0001](ADR/0001-technical-task-completion.md) for the result-backend decision.
+
+## FL-007 telemetry integration
+
+The explicit producer injects W3C traceparent transport headers; the technical task extracts
+context and records one processing span/duration per attempt. Probe payload/result schemas,
+UUID log correlation, retry delays/budget, acknowledgements, bounded RPC result architecture
+and all queue settings remain unchanged. Each prefork child owns telemetry initialized
+after fork and closed on child shutdown. Export is separately opt-in and defaults off;
+collector failure is auxiliary and cannot fail a task or become a readiness dependency.
+No broker URL, queue UUID suffix, payload or task ID becomes a metric/span dimension.
+See [observability](OBSERVABILITY.md) and the unchanged [ADR-0001](ADR/0001-technical-task-completion.md).

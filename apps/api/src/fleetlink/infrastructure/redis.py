@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from uuid import UUID
 
 from anyio import CancelScope
@@ -13,6 +13,7 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from fleetlink.core.config import Settings
+from fleetlink.observability import Telemetry
 
 
 class RedisError(RuntimeError):
@@ -29,6 +30,7 @@ def _safe_errors() -> Iterator[None]:
 
 class TechnicalRedis:
     def __init__(self, settings: Settings) -> None:
+        self.telemetry: Telemetry | None = None
         self._timeout = settings.redis_operation_timeout
         self._closed = False
         self._client = Redis(
@@ -59,7 +61,12 @@ class TechnicalRedis:
 
     async def ping(self) -> bool:
         self._check_open()
-        with _safe_errors():
+        operation = (
+            self.telemetry.operation("redis.PING", attributes={"db.system.name": "redis"})
+            if self.telemetry is not None
+            else nullcontext()
+        )
+        with operation, _safe_errors():
             async with asyncio.timeout(self._timeout):
                 return bool(await self._client.ping())
 
@@ -70,14 +77,24 @@ class TechnicalRedis:
             raise ValueError("Technical Redis values must be strings of at most 256 bytes")
         if type(ttl_seconds) is not int or not 1 <= ttl_seconds <= 300:
             raise ValueError("Technical Redis TTL must be between 1 and 300 seconds")
-        with _safe_errors():
+        operation = (
+            self.telemetry.operation("redis.SET", attributes={"db.system.name": "redis"})
+            if self.telemetry is not None
+            else nullcontext()
+        )
+        with operation, _safe_errors():
             async with asyncio.timeout(self._timeout):
                 await self._client.set(key, value, ex=ttl_seconds)
 
     async def read(self, identifier: UUID) -> str | None:
         self._check_open()
         key = self._key(identifier)
-        with _safe_errors():
+        operation = (
+            self.telemetry.operation("redis.GET", attributes={"db.system.name": "redis"})
+            if self.telemetry is not None
+            else nullcontext()
+        )
+        with operation, _safe_errors():
             async with asyncio.timeout(self._timeout):
                 value = await self._client.get(key)
                 return str(value) if value is not None else None
@@ -85,7 +102,12 @@ class TechnicalRedis:
     async def delete(self, identifier: UUID) -> None:
         self._check_open()
         key = self._key(identifier)
-        with _safe_errors():
+        operation = (
+            self.telemetry.operation("redis.DEL", attributes={"db.system.name": "redis"})
+            if self.telemetry is not None
+            else nullcontext()
+        )
+        with operation, _safe_errors():
             async with asyncio.timeout(self._timeout):
                 await self._client.delete(key)
 

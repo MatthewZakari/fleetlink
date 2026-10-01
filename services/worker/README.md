@@ -8,3 +8,10 @@ bounded contexts and no business tasks are implemented.
 
 See [worker operations](../../docs/ASYNC_INFRASTRUCTURE.md) and
 [real-service tests](../../docs/TESTING.md#fl-006-broker-validation).
+
+FL-007 initializes OpenTelemetry per prefork child, with service identity `fleetlink-worker`.
+Export defaults off; enable it separately from Celery using the shared immutable Settings.
+Standard W3C transport headers continue producer traces, independently of probe UUID log
+correlation. Collector failures do not change task/retry/result semantics. Warm child
+shutdown attempts bounded telemetry cleanup; abrupt kills can lose pending spans.
+See [telemetry configuration, privacy and lifecycle](../../docs/OBSERVABILITY.md).

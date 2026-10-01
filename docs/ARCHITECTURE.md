@@ -97,3 +97,13 @@ business completion. The bounded RPC subclass is recorded in
 [proposed ADR-0001](ADR/0001-technical-task-completion.md). API probes and FL-005 database
 lifecycle remain compatible. [Operations](ASYNC_INFRASTRUCTURE.md) covers configuration,
 resource limits, failure recovery, compatibility warnings and rollback.
+
+## FL-007 implementation boundary
+
+Platform telemetry uses explicitly owned OpenTelemetry API/SDK providers with opt-in
+OTLP HTTP export, standard W3C HTTP/Celery transport propagation and independent log
+correlation. API lifespans and worker prefork children own initialization and bounded
+cleanup; no global providers or domain telemetry are introduced. Narrow native
+instrumentation enforces safe, low-cardinality capture and preserves all FL-004 through
+FL-006 contracts. The collector remains auxiliary and is not a readiness dependency.
+See [observability](OBSERVABILITY.md) and [proposed ADR-0002](ADR/0002-opentelemetry-foundation.md).

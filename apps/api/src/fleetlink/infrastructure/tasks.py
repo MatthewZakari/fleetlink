@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+from contextlib import nullcontext
 
 from celery import Celery, Task
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from fleetlink.core.logging import correlation_id
+from fleetlink.observability import TelemetrySlot
 
 TASK_NAME = "fleetlink.technical.probe.v1"
 MAX_RETRIES = 2
@@ -51,9 +53,15 @@ def execute_probe(payload: ProbePayload, retries: int) -> dict[str, object]:
     return {"probe_id": payload.probe_id, "value": payload.value * 2, "attempts": retries + 1}
 
 
-def register_technical_task(app: Celery) -> None:
+def register_technical_task(app: Celery, telemetry: TelemetrySlot | None = None) -> None:
     @app.task(name=TASK_NAME, bind=True, shared=False, lazy=False, max_retries=MAX_RETRIES)
     def probe(task: Task[[object], dict[str, object]], payload: object) -> dict[str, object]:
+        runtime = telemetry.current if telemetry is not None else None
+        operation = runtime.task(task.request.headers, TASK_NAME) if runtime else nullcontext()
+        with operation:
+            return run_probe(task, payload)
+
+    def run_probe(task: Task[[object], dict[str, object]], payload: object) -> dict[str, object]:
         data = validate_payload(payload)
         token = correlation_id.set(data.probe_id)
         logger = logging.getLogger("fleetlink.worker")

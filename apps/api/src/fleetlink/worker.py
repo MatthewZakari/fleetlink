@@ -8,6 +8,7 @@ from celery import signals
 from fleetlink.core.config import Settings
 from fleetlink.core.logging import JsonFormatter, configure_logging
 from fleetlink.infrastructure.broker import create_celery
+from fleetlink.observability import Telemetry, TelemetrySlot
 
 
 class WorkerFormatter(JsonFormatter):
@@ -42,7 +43,19 @@ def configure_worker_logging(**kwargs: object) -> None:
 
 def main() -> None:
     settings = Settings()
-    app = create_celery(settings)
+    telemetry = TelemetrySlot()
+    app = create_celery(settings, telemetry=telemetry)
+
+    def initialize_telemetry(**kwargs: object) -> None:
+        telemetry.current = Telemetry(settings, "fleetlink-worker")
+
+    def shutdown_telemetry(**kwargs: object) -> None:
+        if telemetry.current is not None:
+            telemetry.current.shutdown()
+            telemetry.current = None
+
+    signals.worker_process_init.connect(initialize_telemetry, weak=False)
+    signals.worker_process_shutdown.connect(shutdown_telemetry, weak=False)
     signals.setup_logging.connect(configure_worker_logging, weak=False)
     try:
         worker = app.Worker(
@@ -58,6 +71,9 @@ def main() -> None:
         if worker.exitcode:
             raise SystemExit(worker.exitcode)
     finally:
+        signals.worker_process_init.disconnect(initialize_telemetry)
+        signals.worker_process_shutdown.disconnect(shutdown_telemetry)
+        signals.setup_logging.disconnect(configure_worker_logging)
         app.close()
 
 

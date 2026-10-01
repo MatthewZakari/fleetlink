@@ -16,9 +16,12 @@ from kombu import Exchange, Producer, Queue
 from kombu.connection import ConnectionPool
 from kombu.exceptions import OperationalError
 from kombu.utils.objects import cached_property
+from opentelemetry import trace
 
 from fleetlink.core.config import Settings
 from fleetlink.infrastructure.tasks import TASK_NAME, ProbePayload, register_technical_task
+from fleetlink.observability import Telemetry, TelemetrySlot
+from fleetlink.observability.runtime import inject
 
 
 class BrokerError(RuntimeError):
@@ -73,7 +76,9 @@ class TechnicalRPCBackend(RPCBackend):
             self.binding(channel).declare()
 
 
-def create_celery(settings: Settings | None = None) -> Celery:
+def create_celery(
+    settings: Settings | None = None, *, telemetry: TelemetrySlot | None = None
+) -> Celery:
     settings = settings if settings is not None else Settings()
     if not settings.celery_enabled:
         raise RuntimeError("Celery is disabled; explicitly set FLEETLINK_CELERY_ENABLED=true")
@@ -159,7 +164,7 @@ def create_celery(settings: Settings | None = None) -> Celery:
         worker_hijack_root_logger=False,
         worker_redirect_stdouts=False,
     )
-    register_technical_task(app)
+    register_technical_task(app, telemetry)
     # Finalize once, then allowlist the sole supported task; no canvas/cleanup tasks.
     for name in tuple(app.tasks):
         if name != TASK_NAME:
@@ -183,7 +188,10 @@ def safe_broker_errors(app: Celery) -> Iterator[None]:
 class TechnicalProducer:
     """Single-thread owner. Use in a dedicated process, never on an ASGI event loop."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, *, telemetry: Telemetry | None = None) -> None:
+        self._settings = settings
+        self.telemetry = telemetry
+        self._owns_telemetry = telemetry is None
         self.app = create_celery(settings)
         self._connections = ConnectionPool(self.app.connection_for_write(), limit=2)
         cast(_PoolOwner, self.app)._pool = self._connections
@@ -198,11 +206,22 @@ class TechnicalProducer:
     def publish(self, payload: ProbePayload) -> AsyncResult[dict[str, object]]:
         if self._closed:
             raise RuntimeError("Producer is closed")
-        with safe_broker_errors(self.app), self.app.connection_for_write() as connection:
+        if self.telemetry is None:
+            self.telemetry = Telemetry(self._settings, "fleetlink-api")
+        with (
+            self.telemetry.operation(
+                "celery.publish",
+                kind=trace.SpanKind.PRODUCER,
+                attributes={"messaging.system": "rabbitmq", "celery.task.name": TASK_NAME},
+            ),
+            safe_broker_errors(self.app),
+            self.app.connection_for_write() as connection,
+        ):
             with connection.Producer() as producer:
                 result: AsyncResult[dict[str, object]] = self.app.send_task(
                     TASK_NAME,
                     args=[payload.model_dump(mode="json")],
+                    headers=inject(),
                     task_id=str(uuid4()),
                     producer=producer,
                     retry=False,
@@ -243,8 +262,14 @@ class TechnicalProducer:
                 with safe_broker_errors(self.app), self.app.connection_for_write() as connection:
                     self.backend.binding(connection).delete(if_unused=True)
         finally:
-            self._connections.force_close_all()
-            self.app.close()
+            try:
+                self._connections.force_close_all()
+            finally:
+                try:
+                    self.app.close()
+                finally:
+                    if self._owns_telemetry and self.telemetry is not None:
+                        self.telemetry.shutdown()
 
     def __enter__(self) -> TechnicalProducer:
         return self
