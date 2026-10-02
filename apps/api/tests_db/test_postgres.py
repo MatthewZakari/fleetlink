@@ -1,7 +1,6 @@
 """Explicit PostgreSQL suite. Never collected by the default tests directory."""
 
 import asyncio
-import os
 import socket
 from pathlib import Path
 
@@ -52,15 +51,6 @@ def test_async_postgres_observability_privacy(settings: Settings) -> None:
             runtime.shutdown()
 
     asyncio.run(run())
-
-
-@pytest.fixture
-def settings() -> Settings:
-    if os.environ.get("FLEETLINK_POSTGRES_DB") != TEST_DATABASE:
-        pytest.fail(
-            "Set FLEETLINK_POSTGRES_DB=fleetlink_test_fl005; development databases are forbidden"
-        )
-    return Settings(database_pool_size=1, database_max_overflow=0)
 
 
 def test_async_postgres_transactions_and_cleanup(settings: Settings) -> None:
@@ -165,7 +155,7 @@ def test_connection_failure(settings: Settings) -> None:
     asyncio.run(run())
 
 
-def test_migration_round_trip(settings: Settings) -> None:
+def test_migration_round_trip(settings: Settings, migrated_database: None) -> None:
     config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
 
     async def revision() -> str | None:
@@ -180,21 +170,10 @@ def test_migration_round_trip(settings: Settings) -> None:
         finally:
             await database.dispose()
 
-    async def assert_fresh() -> None:
-        database = Database(settings)
-        try:
-            async with database.connection() as connection:
-                assert (
-                    await connection.scalar(text("SELECT to_regclass('alembic_version')")) is None
-                ), "Fresh migration requires a newly provisioned dedicated test database"
-        finally:
-            await database.dispose()
-
-    asyncio.run(assert_fresh())
     command.upgrade(config, "head")
-    assert asyncio.run(revision()) == "0001_technical_baseline"
+    assert asyncio.run(revision()) == "0002_identity_foundation"
     command.upgrade(config, "head")
-    assert asyncio.run(revision()) == "0001_technical_baseline"
+    assert asyncio.run(revision()) == "0002_identity_foundation"
 
     async def unrelated_object(*, create: bool) -> None:
         database = Database(settings)
@@ -213,10 +192,33 @@ def test_migration_round_trip(settings: Settings) -> None:
             await database.dispose()
 
     asyncio.run(unrelated_object(create=True))
+    command.check(config)
+    command.downgrade(config, "0001_technical_baseline")
+    assert asyncio.run(revision()) == "0001_technical_baseline"
+
+    async def identity_absent() -> None:
+        database = Database(settings)
+        try:
+            async with database.connection() as connection:
+                for table in ("identity_users", "identity_user_roles"):
+                    assert (
+                        await connection.scalar(
+                            text("SELECT to_regclass(:table)"), {"table": table}
+                        )
+                        is None
+                    )
+        finally:
+            await database.dispose()
+
+    asyncio.run(identity_absent())
+    command.upgrade(config, "head")
+    assert asyncio.run(revision()) == "0002_identity_foundation"
+    command.check(config)
     command.downgrade(config, "base")
     assert asyncio.run(revision()) is None
     command.upgrade(config, "head")
-    assert asyncio.run(revision()) == "0001_technical_baseline"
+    assert asyncio.run(revision()) == "0002_identity_foundation"
+    command.check(config)
     asyncio.run(unrelated_object(create=False))
 
 

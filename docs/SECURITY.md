@@ -90,3 +90,19 @@ files using the checksum-pinned MIT Gitleaks CLI 8.30.1, with no directory exclu
 [Secrets operations](SECRETS.md) defines local defaults, production validation, rotation,
 incident response, rollback and precise limitations. These protections do not secure process
 memory, external debug handlers or arbitrary direct SDK calls.
+
+## FL-009 Identity boundary
+
+Canonical UUID users, bounded account statuses and multiple platform roles now persist in
+Identity-owned tables. UUIDs and role labels are not credentials or authorization evidence.
+`active` is account state, not verified identity. An administrator role grants no bypass;
+future access policy must combine assigned roles with ownership, membership, resource state
+and context-specific rules. Merchant/rider role assignment creates no operational profile.
+
+There are no Identity HTTP endpoints, credentials, passwords, provider identifiers, tokens,
+verification/recovery, sessions, authentication middleware or authorization implementation.
+No personal profile data is stored. Persistence errors use the existing sanitized session
+boundary; domain snapshots are not logged or added to telemetry labels. FL-007 SQL privacy
+and FL-008 redaction/scanning remain unchanged. These internal mutation primitives require
+future authorized use cases and audit policy before exposure. This is not production
+Identity readiness or Phase 1 completion. See [Identity contracts](IDENTITY.md).

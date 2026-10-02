@@ -11,6 +11,7 @@ from sqlalchemy.pool import NullPool
 
 from fleetlink.core.config import Settings
 from fleetlink.infrastructure.database import metadata
+from fleetlink.modules.identity.infrastructure import models as identity_models  # noqa: F401
 
 
 def run_migrations(connection: Connection) -> None:

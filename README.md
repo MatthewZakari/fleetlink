@@ -4,6 +4,11 @@ FleetLink is a planned production-grade Commerce + Logistics Super App connectin
 
 ## Current status
 
+FL-009 begins Phase 1 with an Identity domain and PostgreSQL persistence foundation,
+pending independent review. Canonical UUID users have bounded account status and multiple
+platform roles. No authentication, authorization, credentials, sessions or Identity HTTP
+endpoints are implemented. Phase 1 is not complete. See [Identity contracts](docs/IDENTITY.md).
+
 FL-008 adds classified secret settings, an environment snapshot source, scoped diagnostic
 redaction and checksum-pinned CI secret scanning, pending independent review. See
 [secrets operations](docs/SECRETS.md). No identity/provider functionality is added.
@@ -15,7 +20,7 @@ or tests. See [observability contracts and operations](docs/OBSERVABILITY.md).
 
 FL-006 implements optional Redis and RabbitMQ/Celery technical infrastructure, pending independent review. It adds a dedicated worker and a harmless transport probe, with no business jobs. See [async infrastructure operations](docs/ASYNC_INFRASTRUCTURE.md).
 
-FL-005 adds an optional async PostgreSQL persistence foundation and Alembic technical baseline to the accepted FL-001 through FL-004 foundation. The API implements only /health and /ready plus OpenAPI metadata. The Flutter foundation contains a running screen and Material 3 themes. FL-003 adds optional local PostgreSQL/PostGIS, Redis and RabbitMQ infrastructure. There is no product functionality, domain database schema or production deployment. The only application-managed database object is Alembic revision tracking. Flutter analysis and the three widget/theme tests passed during FL-003 validation; native runner work remains outside this task (see apps/mobile/README.md).
+FL-005 adds an optional async PostgreSQL persistence foundation and Alembic technical baseline to the accepted FL-001 through FL-004 foundation. The API implements only /health and /ready plus OpenAPI metadata. The Flutter foundation contains a running screen and Material 3 themes. FL-003 adds optional local PostgreSQL/PostGIS, Redis and RabbitMQ infrastructure. FL-005 added no product functionality, domain schema or production deployment; FL-009 now adds only the Identity tables described below. Flutter analysis and the three widget/theme tests passed during FL-003 validation; native runner work remains outside this task (see apps/mobile/README.md).
 
 ## Product and architecture
 Anonymous visitors can browse the public marketplace. Authenticated users can access authorized customer, merchant, rider, and administrator experiences without separate accounts per role.
@@ -32,6 +37,7 @@ This is the long-term technology direction. Only bootstrap dependencies listed i
 - [Product vision](docs/PRODUCT.md)
 - [Architecture and context ownership](docs/ARCHITECTURE.md)
 - [Implementation roadmap](docs/ROADMAP.md)
+- [Identity foundation](docs/IDENTITY.md)
 - [Database principles](docs/DATABASE.md)
 - [API standards](docs/API_STANDARDS.md)
 - [Coding standards](docs/CODING_STANDARDS.md)
