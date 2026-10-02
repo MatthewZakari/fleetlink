@@ -217,3 +217,24 @@ Run adjacent secrets, observability, Compose, validator and Flutter gates, plus
 `make secret-scan` and `git diff --check`. Passing unit/offline tests never substitutes for
 PostgreSQL evidence; record unavailable services separately. Authentication/authorization
 and Phase 1 completion are not established by this suite.
+
+## FL-010 session validation
+
+`make api-test` now includes session UUID/time/expiry/status/version validation, UTC
+normalization, immutable equality, idempotent revocation, explicit-time expiry and offline
+migration ownership. Existing inner-layer import tests cover the new domain/application files.
+`make api-test-db` on freshly provisioned `fleetlink_test_fl005` exercises schema types/checks,
+user FK/RESTRICT deletion, duplicate IDs/families, missing rows, detached UTC snapshots,
+family lookup, immutable metadata, explicit transactions, composed rollback, terminal
+revocation and two simultaneous optimistic writers with exactly one winner.
+
+The migration test additionally seeds a user/role/session, downgrades head to FL-009,
+asserts users/roles/unrelated sentinel/PostGIS survive and sessions disappear, then
+re-upgrades to an empty session schema and runs Alembic drift checks. Existing technical
+baseline/full downgrade and re-upgrade tests remain. Use the setup/test/drop workflow above,
+then `make infra-down` preserving development volumes. Never use `fleetlink_dev` for tests.
+
+Run all existing backend, secrets, observability, lint/type, Compose/validator, mobile and
+pinned secret-scan regressions. Keep the real broker regression prescribed by FL-008 even
+though sessions do not modify it. No token/replay/HTTP authentication acceptance is implied;
+those flows remain deferred and Phase 1 remains incomplete.

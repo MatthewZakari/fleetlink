@@ -137,3 +137,14 @@ This implements the prescribed modular monolith using context-prefixed tables in
 existing namespace. No new physical schema, cross-context ownership, provider choice or
 significant compatibility decision is adopted, so no FL-009 ADR is created. Authentication,
 credentials, sessions, memberships, audit/outbox and production authorization remain deferred.
+
+## FL-010 session persistence boundary
+
+Identity now owns immutable authentication-session lineages and a typed session repository
+alongside users. A unique family identifies one stable session; optimistic conditional
+writes protect lifecycle changes and terminal revocation. User deletion is restricted while
+sessions exist, pending explicit retention/deletion policy. No token protocol, token records,
+authentication flow, authorization, provider, HTTP route or new runtime component is added.
+The existing transaction/metadata/privacy boundaries apply. This scoped implementation of
+the prescribed architecture needs no new ADR. Phase 1 remains incomplete. See
+[session contracts and rotation boundary](IDENTITY.md#fl-010-authentication-session-foundation).

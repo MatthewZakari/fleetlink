@@ -121,3 +121,13 @@ optimistic snapshots prevent hidden commits and stale replacement. No Identity r
 authentication, authorization or startup migration is added. See [Identity contracts](../../docs/IDENTITY.md),
 [destructive rollback](../../docs/DATABASE.md#fl-009-identity-schema-and-migration) and
 [tests](../../docs/TESTING.md#fl-009-identity-validation).
+
+## FL-010 session foundation
+
+Identity adds immutable session lineages, typed repository ports and caller-owned optimistic
+SQLAlchemy persistence. Migration `0003_auth_session_foundation` creates only
+`identity_auth_sessions`; downgrade to FL-009 destroys session data while retaining users.
+No token/verifier, auth endpoint, middleware, provider or dependency is added. Phase 1
+remains incomplete. See [session contracts](../../docs/IDENTITY.md#fl-010-authentication-session-foundation),
+[migration operations](../../docs/DATABASE.md#fl-010-session-schema-and-migration) and
+[validation](../../docs/TESTING.md#fl-010-session-validation).

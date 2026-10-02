@@ -182,3 +182,19 @@ FLEETLINK_POSTGRES_DB=<intended-db> make api-db-upgrade
 
 Use an actual explicitly intended database name in place of `<intended-db>`. Never run the
 integration suite against development; use the [guarded FL-005 workflow](TESTING.md#fl-005-database-validation).
+
+## FL-010 session schema and migration
+
+Revision `0003_auth_session_foundation` follows `0002_identity_foundation` and adds only
+`identity_auth_sessions`. [Identity contracts](IDENTITY.md#repository-and-schema) define
+its constraints, the unique family lookup index, restrictive user FK and caller-owned
+optimistic writes. Existing user/role tables and PostGIS remain unchanged. No startup DDL,
+new settings or UUID/time defaults are introduced. Upgrade uses the existing explicit
+`api-db-upgrade` command. Prefer code rollback with additive schema retained.
+
+**Destructive downgrade:** `alembic -c apps/api/alembic.ini downgrade 0002_identity_foundation`
+(with the explicitly intended database environment and existing locked uv runner) drops
+all session rows and their table/indexes permanently. Users, roles, unrelated tables and
+PostGIS survive. Re-upgrade creates an empty session table, not restored security evidence.
+Downgrading further to `0001_technical_baseline` also destroys FL-009 user/role data.
+Back up and review recovery/forward-fix plans outside the dedicated test database.

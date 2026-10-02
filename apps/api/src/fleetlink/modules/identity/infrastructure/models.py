@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     PrimaryKeyConstraint,
     String,
+    UniqueConstraint,
     Uuid,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -55,3 +56,26 @@ class UserRoleRecord(Base):
         primary_key=True,
     )
     role: Mapped[str] = mapped_column(String(16), primary_key=True)
+
+
+class AuthenticationSessionRecord(Base):
+    __tablename__ = "identity_auth_sessions"
+    __table_args__ = (
+        PrimaryKeyConstraint("id", name="pk_identity_auth_sessions"),
+        UniqueConstraint("family_id", name="uq_identity_auth_sessions_family"),
+        CheckConstraint("status IN ('active', 'revoked')", name="ck_identity_auth_sessions_status"),
+        CheckConstraint("version >= 0", name="ck_identity_auth_sessions_version"),
+        CheckConstraint("expires_at > created_at", name="ck_identity_auth_sessions_expiry"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("identity_users.id", name="fk_identity_auth_sessions_user", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    family_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
