@@ -84,8 +84,8 @@ Real PostgreSQL tests cover authenticated access and invalid-password failure, P
 extension/version and SRID 4326 operations, session cleanup, committed temporary-table
 writes, injected-failure rollback, cancelled-task rollback, refused connections and pool
 disposal. Migration tests upgrade a fresh database, repeat head, downgrade to base, and
-re-upgrade, asserting revision state and PostGIS survival. Only temporary/test-owned objects
-and Alembic revision tracking are used; no domain entities or fixtures exist.
+re-upgrade, asserting revision state and PostGIS survival. FL-005 used only temporary/test-owned objects and revision tracking. FL-009 extends this
+explicit workflow with synthetic Identity records and their migration, as described below.
 
 Required regressions remain `make api-test`, `make api-lint`, `make api-typecheck`,
 `make infra-config`, `python3 infrastructure/docker/test_validate.py`,
@@ -190,3 +190,30 @@ Run `make secret-scan` with Gitleaks 8.30.1 (or set `FLEETLINK_GITLEAKS_BIN` to 
 Both history and working-tree scans redact findings. Fixtures need no scanner allowlist.
 See [classification, scanner installation and limits](SECRETS.md). Database integration still
 requires fresh `fleetlink_test_fl005`, explicit setup/drop and cleanup verification.
+
+## FL-009 Identity validation
+
+`make api-test` includes deterministic pure-domain invariants, UTC normalization, immutable
+snapshot semantics, idempotent assignment/removal, invalid status/role/version rejection,
+inner-layer import boundaries and offline migration SQL. Run `make api-lint` (includes
+`ruff format --check`) and `make api-typecheck`; there is no `api-format` target.
+To apply formatting use `uv run --project apps/api --locked ruff format apps/api`.
+
+The unchanged explicit `infra-up`, `api-db-test-setup`, dedicated-database `api-test-db`,
+`api-db-test-drop` workflow above now validates real Identity constraints/types, independent
+sessions, missing identities, multiple roles, committed updates, rollback, cancellation,
+foreign keys and duplicate constraints, immutable creation metadata, explicit transaction
+requirements and competing optimistic saves. No SQLite substitute exists. A session-scoped
+fixture retains the exact-name safety check and rejects pre-existing revision tracking;
+Identity and migration tests can run in any order after fresh upgrade.
+
+Migration tests upgrade fresh to head, verify no autogeneration drift with an unrelated
+sentinel, downgrade to the technical baseline and assert Identity absence, re-upgrade,
+then exercise full baseline downgrade/re-upgrade while preserving PostGIS and the sentinel.
+`api-test-db` must not run concurrently with another suite using the fixed test database.
+Its guarded drop is explicit and destructive only to `fleetlink_test_fl005`.
+
+Run adjacent secrets, observability, Compose, validator and Flutter gates, plus
+`make secret-scan` and `git diff --check`. Passing unit/offline tests never substitutes for
+PostgreSQL evidence; record unavailable services separately. Authentication/authorization
+and Phase 1 completion are not established by this suite.

@@ -55,7 +55,7 @@ new response headers and OpenAPI failure descriptions are additive.
 The FL-004 statements above describe that milestone; FL-005 adds SQLAlchemy/asyncpg and
 Alembic plus a direct declaration of the existing AnyIO dependency. See
 [configuration, lifecycle, transactions and dependency rationale](../../docs/DATABASE.md#fl-005-persistence-foundation).
-`infrastructure/database.py` owns the engine/session adapter and empty metadata registry;
+`infrastructure/database.py` owns the engine/session adapter and explicit metadata registry;
 `core/dependencies.py` exposes typed `get_database` and `get_session`. Factory construction
 performs no database I/O or engine creation. Lifespan resource enablement is explicit via
 `FLEETLINK_DATABASE_ENABLED`; default false preserves isolated factory tests.
@@ -111,3 +111,13 @@ broker clients reject development defaults. Local/test defaults remain compatibl
 full Git history and the working tree with checksum-pinned Gitleaks 8.30.1; run
 `make secret-scan` locally. No Python dependency or lockfile change is introduced.
 See [source injection, classification, rotation and limits](../../docs/SECRETS.md).
+
+## FL-009 Identity foundation
+
+`modules/identity` provides pure users/status/roles, typed repository ports and separate
+SQLAlchemy records/adapters. Alembic explicitly imports those mappings and revision
+`0002_identity_foundation` creates two context-owned tables. Caller-owned transactions and
+optimistic snapshots prevent hidden commits and stale replacement. No Identity route,
+authentication, authorization or startup migration is added. See [Identity contracts](../../docs/IDENTITY.md),
+[destructive rollback](../../docs/DATABASE.md#fl-009-identity-schema-and-migration) and
+[tests](../../docs/TESTING.md#fl-009-identity-validation).

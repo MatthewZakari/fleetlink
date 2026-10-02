@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import (
 
 from fleetlink.core.config import Settings
 
-# Future explicitly imported ORM mappings register here. Never create_all at startup.
+# Explicit infrastructure mappings register here. Never create_all at startup.
 metadata = MetaData()
 
 

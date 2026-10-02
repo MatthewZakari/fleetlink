@@ -72,11 +72,11 @@ Each enabled application lifespan owns its engine and session factory; construct
 lazy with respect to connections and shutdown disposes the pool. Typed native dependencies
 expose these resources without a service container. Sessions require explicit transactions.
 The existing application-only readiness and health contracts are unchanged; neither is a
-database availability assertion. No domain repositories or mappings exist.
+database availability assertion. FL-005 introduced no domain repositories or mappings; FL-009 adds the Identity mappings below.
 
 Alembic executes outside application startup using an async connection and `run_sync`.
 The technical baseline validates infrastructure-provisioned PostGIS and tracks revision
-state without domain tables. Metadata is empty and is an explicit future mapping registry;
+state without domain tables. Metadata is the authoritative explicit mapping registry (empty in FL-005);
 autogeneration ignores reflected tables absent from that registry, protecting extension
 and unrelated objects. Reviewed manual migrations are required for intentional table drops.
 These choices implement the prescribed SQLAlchemy/Alembic architecture and FL-005 extension
@@ -117,3 +117,23 @@ credentials at their existing infrastructure boundaries. Explicitly owned reques
 redaction contexts avoid process-global credential registries. Rotation requires drained client
 recreation or process restart. No identity context, provider SDK or deployment work is added.
 See [operations](SECRETS.md) and [proposed ADR-0003](ADR/0003-secrets-configuration-boundary.md).
+
+## FL-009 Identity foundation
+
+`modules/identity` is the first implemented bounded context. Pure immutable domain snapshots
+own canonical user identity, status and platform role assignments. The application layer
+exposes a typed `UserRepository` protocol and missing/conflict errors. Infrastructure maps
+separate SQLAlchemy records onto the shared metadata; Alembic explicitly imports only these
+intentional mappings. The existing unowned/PostGIS autogeneration filter remains intact.
+
+The caller composes the adapter inside the existing explicit session/transaction contexts;
+no service container, generic repository, Unit of Work, HTTP surface or import-time I/O is
+introduced. Optimistic versions prevent stale whole-aggregate role/status replacement;
+a single joined read returns a consistent snapshot. Roles describe eligibility, never
+Commerce storefronts, Logistics profiles, resource ownership or administrator bypass.
+See [Identity model and transaction contract](IDENTITY.md).
+
+This implements the prescribed modular monolith using context-prefixed tables in the
+existing namespace. No new physical schema, cross-context ownership, provider choice or
+significant compatibility decision is adopted, so no FL-009 ADR is created. Authentication,
+credentials, sessions, memberships, audit/outbox and production authorization remain deferred.

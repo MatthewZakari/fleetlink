@@ -116,7 +116,7 @@ It adds no domain tables or schemas. Alembic owns `alembic_version`.
 FLEETLINK_POSTGRES_DB=fleetlink_dev make api-db-upgrade
 FLEETLINK_POSTGRES_DB=fleetlink_dev make api-db-current
 make api-db-history
-# Explicit rollback: changes revision state, preserves PostGIS and unrelated objects.
+# DESTRUCTIVE with FL-009: removes Identity data; preserves PostGIS/unrelated objects.
 FLEETLINK_POSTGRES_DB=fleetlink_dev make api-db-downgrade-base
 FLEETLINK_POSTGRES_DB=fleetlink_dev make api-db-upgrade
 ```
@@ -125,9 +125,9 @@ Supply the actual intended database/host and shared credentials explicitly. When
 root `.env`, use `uv run --env-file .env --project apps/api --locked alembic -c
 apps/api/alembic.ini upgrade head` on one shell line. No migration runs at FastAPI startup.
 Run only one migration executor per database. A failed baseline transaction leaves no
-partial revision state; provision prerequisites and retry. Downgrade removes the baseline
-revision entry, leaving Alembic's version table, PostGIS and unrelated data intact. Application
-rollback disables persistence or restores FL-004 code; no business data conversion exists.
+partial revision state; provision prerequisites and retry. Downgrading the baseline alone removes its revision entry, leaving Alembic's version
+table, PostGIS and unrelated data intact. With FL-009 installed, downgrade to base first
+drops Identity tables and their data. See the destructive rollback warning below.
 
 Offline SQL is supported with `alembic -c apps/api/alembic.ini upgrade head --sql` using
 `uv run --project apps/api --locked`. It needs no credentials/connection, emits a PostgreSQL
@@ -148,8 +148,37 @@ uv resolves and pins all dependencies; no lockfile is edited manually. GeoAlchem
 unnecessary without geographic ORM columns. These libraries require regular advisory and
 license review; passing tests is not a vulnerability scan. Operational costs are bounded
 connection pools and a separately invoked migration tool, with no new service. SSL policy,
-production credentials/roles, dependency readiness, domain repositories, schemas, migrations
-and geographic mappings remain separately scoped work. No FL-006 functionality is included.
+production credentials/roles, dependency readiness and geographic mappings remain separately
+scoped work; FL-009 adds only the Identity repository/schema described below. No FL-006 functionality is included.
 
 Implementation follows [SQLAlchemy async documentation](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html)
 and [Alembic async integration](https://alembic.sqlalchemy.org/en/latest/cookbook.html#using-asyncio-with-alembic).
+
+## FL-009 Identity schema and migration
+
+Revision `0002_identity_foundation` follows `0001_technical_baseline`. It creates only
+`identity_users` and `identity_user_roles` in the existing namespace. See the exact
+[columns, constraints, UUID and concurrency contract](IDENTITY.md). No extension, physical
+schema, credential table or cross-context foreign key is introduced. The two primary keys
+supply the only indexes: UUID lookup and per-user role retrieval/uniqueness. No speculative
+status/role-wide search index exists. Alembic `check` verifies supported schema comparisons during integration tests, including
+an unrelated sentinel table. Explicit PostgreSQL tests verify checks, uniqueness and foreign
+keys; Alembic alone does not compare every constraint.
+
+Upgrade remains `FLEETLINK_POSTGRES_DB=<intended-db> make api-db-upgrade`; no migration runs
+at startup. Old technical-only API code does not access the new tables. Prefer application
+rollback leaving these additive tables intact when data must survive.
+
+**Destructive downgrade:** the following explicitly removes both Identity tables and all
+their data, preserving PostGIS, unrelated objects and the technical baseline. Back up data
+and choose a forward fix or reviewed restore strategy before rollback outside isolated tests.
+Re-upgrade recreates empty tables; it does not recover deleted identities.
+
+```sh
+FLEETLINK_POSTGRES_DB=<intended-db> uv run --project apps/api --locked \
+  alembic -c apps/api/alembic.ini downgrade 0001_technical_baseline
+FLEETLINK_POSTGRES_DB=<intended-db> make api-db-upgrade
+```
+
+Use an actual explicitly intended database name in place of `<intended-db>`. Never run the
+integration suite against development; use the [guarded FL-005 workflow](TESTING.md#fl-005-database-validation).
