@@ -1,8 +1,9 @@
 # Bounded contexts
 
 FL-009 implements `identity/domain`, `identity/application` and `identity/infrastructure`.
-The domain has no framework dependencies; typed application ports expose detached users;
-the SQLAlchemy adapter uses caller-owned sessions and transactions. There are no Identity
+The domain has no framework dependencies. FL-010 adds immutable session lineages. Typed
+application ports expose detached snapshots; SQLAlchemy adapters use caller-owned sessions
+and transactions. There are no Identity
 HTTP endpoints. See [Identity contracts](../../../../../docs/IDENTITY.md) and
 [context ownership](../../../../../docs/ARCHITECTURE.md).
 

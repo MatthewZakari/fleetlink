@@ -100,9 +100,27 @@ future access policy must combine assigned roles with ownership, membership, res
 and context-specific rules. Merchant/rider role assignment creates no operational profile.
 
 There are no Identity HTTP endpoints, credentials, passwords, provider identifiers, tokens,
-verification/recovery, sessions, authentication middleware or authorization implementation.
+verification/recovery, authentication middleware or authorization implementation.
+FL-010 adds internal session persistence as described below.
 No personal profile data is stored. Persistence errors use the existing sanitized session
 boundary; domain snapshots are not logged or added to telemetry labels. FL-007 SQL privacy
 and FL-008 redaction/scanning remain unchanged. These internal mutation primitives require
 future authorized use cases and audit policy before exposure. This is not production
 Identity readiness or Phase 1 completion. See [Identity contracts](IDENTITY.md).
+
+## FL-010 session persistence boundary
+
+Identity sessions now persist UUID ownership, lifetime, stable unique family, lifecycle
+and optimistic version. They contain no tokens, verifiers, credentials, copied roles or
+profiles. Active session state is not authentication or authorization. Conditional saves
+cannot undo revocation or overwrite a newer version; user deletion is restricted while
+session evidence exists. Expiry is evaluated from explicit time, without a state mutation.
+
+Raw bearer/refresh tokens must never be persisted or logged. No token format or hashing
+algorithm is selected here; future bounded one-way verifier records, atomic rotation,
+consumed-token history and reuse response require separate review. Do not log session
+snapshots, cookies, Authorization headers, SQL/parameters or token/verifier data; do not
+use user/session/family/token identifiers as metric labels or secret data in telemetry.
+Existing FL-007/FL-008 boundaries remain unchanged. HTTP authentication, JWT, providers,
+credentials, MFA/recovery, authorization and production readiness remain deferred. See
+[Identity contracts](IDENTITY.md#fl-010-authentication-session-foundation).

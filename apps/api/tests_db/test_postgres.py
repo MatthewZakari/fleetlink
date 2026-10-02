@@ -171,9 +171,9 @@ def test_migration_round_trip(settings: Settings, migrated_database: None) -> No
             await database.dispose()
 
     command.upgrade(config, "head")
-    assert asyncio.run(revision()) == "0002_identity_foundation"
+    assert asyncio.run(revision()) == "0003_auth_session_foundation"
     command.upgrade(config, "head")
-    assert asyncio.run(revision()) == "0002_identity_foundation"
+    assert asyncio.run(revision()) == "0003_auth_session_foundation"
 
     async def unrelated_object(*, create: bool) -> None:
         database = Database(settings)
@@ -193,6 +193,69 @@ def test_migration_round_trip(settings: Settings, migrated_database: None) -> No
 
     asyncio.run(unrelated_object(create=True))
     command.check(config)
+
+    async def session_schema(stage: str) -> None:
+        database = Database(settings)
+        try:
+            async with database.connection() as connection, connection.begin():
+                if stage == "seed":
+                    await connection.execute(
+                        text(
+                            "INSERT INTO identity_users VALUES "
+                            "('00000000-0000-4000-8000-000000001010', 'active', "
+                            "'2026-01-01T00:00:00Z', 0)"
+                        )
+                    )
+                    await connection.execute(
+                        text(
+                            "INSERT INTO identity_user_roles VALUES "
+                            "('00000000-0000-4000-8000-000000001010', 'customer')"
+                        )
+                    )
+                    await connection.execute(
+                        text(
+                            "INSERT INTO identity_auth_sessions VALUES "
+                            "('00000000-0000-4000-8000-000000001011', "
+                            "'00000000-0000-4000-8000-000000001010', "
+                            "'00000000-0000-4000-8000-000000001012', "
+                            "'2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z', 'revoked', 2)"
+                        )
+                    )
+                else:
+                    assert await connection.scalar(text("SELECT count(*) FROM identity_users")) == 1
+                    assert (
+                        await connection.scalar(text("SELECT count(*) FROM identity_user_roles"))
+                        == 1
+                    )
+                    assert (
+                        await connection.scalar(text("SELECT value FROM fl005_migration_probe"))
+                        == 42
+                    )
+                    if stage == "absent":
+                        assert (
+                            await connection.scalar(
+                                text("SELECT to_regclass('identity_auth_sessions')")
+                            )
+                            is None
+                        )
+                    else:
+                        assert (
+                            await connection.scalar(
+                                text("SELECT count(*) FROM identity_auth_sessions")
+                            )
+                            == 0
+                        )
+        finally:
+            await database.dispose()
+
+    asyncio.run(session_schema("seed"))
+    command.downgrade(config, "0002_identity_foundation")
+    assert asyncio.run(revision()) == "0002_identity_foundation"
+    asyncio.run(session_schema("absent"))
+    command.upgrade(config, "head")
+    assert asyncio.run(revision()) == "0003_auth_session_foundation"
+    asyncio.run(session_schema("empty"))
+    command.check(config)
     command.downgrade(config, "0001_technical_baseline")
     assert asyncio.run(revision()) == "0001_technical_baseline"
 
@@ -200,7 +263,7 @@ def test_migration_round_trip(settings: Settings, migrated_database: None) -> No
         database = Database(settings)
         try:
             async with database.connection() as connection:
-                for table in ("identity_users", "identity_user_roles"):
+                for table in ("identity_users", "identity_user_roles", "identity_auth_sessions"):
                     assert (
                         await connection.scalar(
                             text("SELECT to_regclass(:table)"), {"table": table}
@@ -212,12 +275,12 @@ def test_migration_round_trip(settings: Settings, migrated_database: None) -> No
 
     asyncio.run(identity_absent())
     command.upgrade(config, "head")
-    assert asyncio.run(revision()) == "0002_identity_foundation"
+    assert asyncio.run(revision()) == "0003_auth_session_foundation"
     command.check(config)
     command.downgrade(config, "base")
     assert asyncio.run(revision()) is None
     command.upgrade(config, "head")
-    assert asyncio.run(revision()) == "0002_identity_foundation"
+    assert asyncio.run(revision()) == "0003_auth_session_foundation"
     command.check(config)
     asyncio.run(unrelated_object(create=False))
 
