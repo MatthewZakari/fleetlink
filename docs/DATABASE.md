@@ -198,3 +198,19 @@ all session rows and their table/indexes permanently. Users, roles, unrelated ta
 PostGIS survive. Re-upgrade creates an empty session table, not restored security evidence.
 Downgrading further to `0001_technical_baseline` also destroys FL-009 user/role data.
 Back up and review recovery/forward-fix plans outside the dedicated test database.
+
+## FL-011 refresh-token schema and migration
+
+`0004_refresh_token_rotation` follows `0003_auth_session_foundation` and adds only
+`identity_refresh_tokens`. See [schema and atomic transaction contracts](IDENTITY.md#schema-and-operational-limits).
+The shorter revision ID fits existing Alembic revision storage. A partial unique current
+record per session and a deferred replacement FK support consume-before-insert rotation;
+both evidence FKs restrict deletion. One-way verifier bytes have a 1–512-byte check and no
+uniqueness requirement. No existing schema, PostGIS, startup DDL or configuration is changed.
+
+**Destructive downgrade:** with the explicitly intended database/host environment,
+`uv run --project apps/api --locked alembic -c apps/api/alembic.ini downgrade 0003_auth_session_foundation`
+drops only refresh records and their table/index. Users, roles, sessions, PostGIS and unrelated
+objects survive. `make api-db-upgrade` recreates an empty refresh table. Lost evidence is not
+restored. Prefer code rollback retaining the additive schema; review backups/forward fixes
+before destructive rollback outside the dedicated test database.

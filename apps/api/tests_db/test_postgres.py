@@ -171,9 +171,9 @@ def test_migration_round_trip(settings: Settings, migrated_database: None) -> No
             await database.dispose()
 
     command.upgrade(config, "head")
-    assert asyncio.run(revision()) == "0003_auth_session_foundation"
+    assert asyncio.run(revision()) == "0004_refresh_token_rotation"
     command.upgrade(config, "head")
-    assert asyncio.run(revision()) == "0003_auth_session_foundation"
+    assert asyncio.run(revision()) == "0004_refresh_token_rotation"
 
     async def unrelated_object(*, create: bool) -> None:
         database = Database(settings)
@@ -248,12 +248,69 @@ def test_migration_round_trip(settings: Settings, migrated_database: None) -> No
         finally:
             await database.dispose()
 
+    async def refresh_schema(stage: str) -> None:
+        database = Database(settings)
+        try:
+            async with database.connection() as connection, connection.begin():
+                if stage == "seed":
+                    await connection.execute(
+                        text(
+                            "INSERT INTO identity_refresh_tokens "
+                            "(id, session_id, verifier, created_at, expires_at, "
+                            "status, version) VALUES "
+                            "('00000000-0000-4000-8000-000000001013', "
+                            "'00000000-0000-4000-8000-000000001011', 'test-digest'::bytea, "
+                            "'2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z', 'current', 0)"
+                        )
+                    )
+                elif stage == "absent":
+                    assert (
+                        await connection.scalar(
+                            text("SELECT to_regclass('identity_refresh_tokens')")
+                        )
+                        is None
+                    )
+                else:
+                    assert (
+                        await connection.scalar(
+                            text("SELECT count(*) FROM identity_refresh_tokens")
+                        )
+                        == 0
+                    )
+                assert await connection.scalar(text("SELECT count(*) FROM identity_users")) == 1
+                assert (
+                    await connection.scalar(text("SELECT count(*) FROM identity_user_roles")) == 1
+                )
+                assert (
+                    await connection.scalar(
+                        text(
+                            "SELECT count(*) FROM identity_auth_sessions "
+                            "WHERE status = 'revoked' AND version = 2"
+                        )
+                    )
+                    == 1
+                )
+                assert (
+                    await connection.scalar(text("SELECT value FROM fl005_migration_probe")) == 42
+                )
+                assert await connection.scalar(text("SELECT PostGIS_Version()"))
+        finally:
+            await database.dispose()
+
     asyncio.run(session_schema("seed"))
+    asyncio.run(refresh_schema("seed"))
+    command.downgrade(config, "0003_auth_session_foundation")
+    assert asyncio.run(revision()) == "0003_auth_session_foundation"
+    asyncio.run(refresh_schema("absent"))
+    command.upgrade(config, "head")
+    assert asyncio.run(revision()) == "0004_refresh_token_rotation"
+    asyncio.run(refresh_schema("empty"))
+    command.check(config)
     command.downgrade(config, "0002_identity_foundation")
     assert asyncio.run(revision()) == "0002_identity_foundation"
     asyncio.run(session_schema("absent"))
     command.upgrade(config, "head")
-    assert asyncio.run(revision()) == "0003_auth_session_foundation"
+    assert asyncio.run(revision()) == "0004_refresh_token_rotation"
     asyncio.run(session_schema("empty"))
     command.check(config)
     command.downgrade(config, "0001_technical_baseline")
@@ -263,7 +320,12 @@ def test_migration_round_trip(settings: Settings, migrated_database: None) -> No
         database = Database(settings)
         try:
             async with database.connection() as connection:
-                for table in ("identity_users", "identity_user_roles", "identity_auth_sessions"):
+                for table in (
+                    "identity_users",
+                    "identity_user_roles",
+                    "identity_auth_sessions",
+                    "identity_refresh_tokens",
+                ):
                     assert (
                         await connection.scalar(
                             text("SELECT to_regclass(:table)"), {"table": table}
@@ -275,12 +337,12 @@ def test_migration_round_trip(settings: Settings, migrated_database: None) -> No
 
     asyncio.run(identity_absent())
     command.upgrade(config, "head")
-    assert asyncio.run(revision()) == "0003_auth_session_foundation"
+    assert asyncio.run(revision()) == "0004_refresh_token_rotation"
     command.check(config)
     command.downgrade(config, "base")
     assert asyncio.run(revision()) is None
     command.upgrade(config, "head")
-    assert asyncio.run(revision()) == "0003_auth_session_foundation"
+    assert asyncio.run(revision()) == "0004_refresh_token_rotation"
     command.check(config)
     asyncio.run(unrelated_object(create=False))
 
