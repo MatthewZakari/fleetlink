@@ -131,3 +131,15 @@ No token/verifier, auth endpoint, middleware, provider or dependency is added. P
 remains incomplete. See [session contracts](../../docs/IDENTITY.md#fl-010-authentication-session-foundation),
 [migration operations](../../docs/DATABASE.md#fl-010-session-schema-and-migration) and
 [validation](../../docs/TESTING.md#fl-010-session-validation).
+
+## FL-011 refresh-token persistence foundation
+
+Identity adds immutable refresh evidence, a typed `add`/`get`/`rotate` port and atomic
+session/token optimistic writes. `0004_refresh_token_rotation` adds only
+`identity_refresh_tokens`. UUID lookup identifiers are not bearer credentials; bounded
+one-way verifier bytes are excluded from representations. No raw tokens are stored.
+Repositories never own transactions. No protocol, HTTP authentication flow, dependency or
+telemetry change is introduced. Phase 1 remains incomplete. See
+[refresh contracts](../../docs/IDENTITY.md#fl-011-refresh-token-rotation-foundation),
+[migration safety](../../docs/DATABASE.md#fl-011-refresh-token-schema-and-migration) and
+[validation](../../docs/TESTING.md#fl-011-refresh-token-validation).

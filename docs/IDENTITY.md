@@ -84,7 +84,7 @@ There are no Identity logs/spans or UUID metric labels; existing SQL instrumenta
 neither statements nor parameters. Fixtures use only synthetic data.
 
 Deferred: credentials/federation/provider choice, authentication/registration endpoints,
-JWT/refresh tokens, password hashing, MFA, verification/recovery, device management,
+JWT/refresh-token protocols, password hashing, MFA, verification/recovery, device management,
 authorization enforcement, scoped memberships, privileged grant workflows, audit persistence,
 outbox, business profiles and Flutter UI. No runtime/tool dependency or lockfile change is
 needed. The prescribed ownership and existing database namespace suffice without a new ADR.
@@ -170,9 +170,136 @@ Authorization headers or SQL/parameters. FL-007 capture bounds and FL-008 diagno
 sanitization remain intact. Future verifiers must have a bounded, explicitly classified,
 algorithm-neutral storage contract until the cryptographic protocol is reviewed.
 
-Deferred: token records, token generation/verification/rotation/reuse handling, login,
+Deferred after FL-010: token records (added by FL-011 below), token generation/verification,
+refresh flows and reuse response, login,
 registration, refresh/logout, session/device HTTP management, JWT/JWKS/key management,
 credentials/provider choice, OAuth/OIDC/PKCE, MFA, verification/recovery, authorization,
-audit/outbox and all FL-011 work. No cross-cutting departure from prescribed Identity
+audit/outbox. FL-011 extends persistence below. No cross-cutting departure from prescribed Identity
 ownership or persistence conventions requires a new ADR; credential/provider decisions
 remain reserved for their own ADRs. See [validation](TESTING.md#fl-010-session-validation).
+
+## FL-011 refresh-token rotation foundation
+
+FL-011 adds internal domain/persistence primitives, pending independent review. It does not
+implement authentication or complete Phase 1. Identity owns `RefreshTokenRecord` beneath
+one existing `AuthenticationSession`; user roles, account status and authorization decisions
+are never copied into it.
+
+| Field | Meaning |
+| --- | --- |
+| `id: UUID` | Non-secret opaque candidate lookup identifier; possession proves nothing |
+| `session_id: UUID` | Stable session/family owner |
+| `verifier: RefreshVerifier` | Sensitive immutable one-way material, 1–512 bytes |
+| `created_at`, `expires_at` | UTC-aware lifetime, expiry strictly after creation |
+| `status` | `current` or terminal `consumed` |
+| `replaced_by_id: UUID or None` | Different replacement record, mandatory when consumed |
+| `consumed_at: datetime or None` | UTC-aware consumption instant within the old lifetime |
+| `version: int` | Nonnegative optimistic persistence counter; booleans rejected |
+
+Aware timestamps normalize to UTC, following FL-009/FL-010. Snapshots are frozen and compare
+all state; record ID is identity across versions. Verifier bytes and the containing verifier
+field are excluded from repr/str; exception messages contain only fixed text. The wrapper's
+`value` exists solely for trusted persistence and future verification. Never serialize
+snapshots (including dataclass `asdict`), inspect them in shared diagnostics, or log verifier
+values. Memory/debug access is not secured by repr omission. There is no global secret
+registry and no new telemetry capture.
+
+### Identifier and verifier boundary
+
+Lookup uses the UUID, never a bearer token or verifier. Verifier bytes must already be
+one-way evidence from a future reviewed protocol. The type checks size and immutability;
+it cannot establish that caller-supplied bytes were cryptographically derived. No raw bearer
+refresh token, reversible ciphertext, cookie or Authorization header may be supplied.
+The 512-byte cap is a storage envelope, not an algorithm, security-strength claim, public
+wire format or token-generation protocol. No uniqueness constraint is imposed on verifier
+bytes because that protocol is not selected. No token generation, possession verification,
+constant-time comparison or cryptographic library is added.
+
+### Lifecycle, expiry and reuse
+
+`CURRENT -> CONSUMED -> replaced_by_id` preserves previous evidence; the linked record
+starts CURRENT. Current records have no consumption metadata. Consumed records require both
+fields and `created_at <= consumed_at < expires_at`. Self-replacement is invalid. There is
+no reactivation, metadata editing, deletion API or idempotent successful consumption.
+`consume(replacement_id, at)` returns a new snapshot without advancing persistence version.
+
+`is_expired(at)` is true exactly at expiry and thereafter, with no database state mutation.
+All decisions receive explicit aware time; no domain clock is read. `require_current(at)`
+raises `RefreshTokenReuse` for consumed records, even after expiry, and
+`RefreshTokenExpired` for expired current records. Evaluation before creation is invalid.
+Missing `get` returns `None`, distinct internally from current, expired and consumed.
+These are internal evidence outcomes, not proof of bearer possession or public responses.
+Future handling must verify possession before treating reuse as confirmed and should revoke
+the relevant stable session/family under an explicitly reviewed policy. Existing session
+`revoke`/`save` supplies terminal revocation; FL-011 adds no automatic or account-wide policy.
+
+### Persistence and atomic rotation
+
+`RefreshTokenRepository` exposes `add`, `get` and `rotate(token, replacement, session, at=...)`.
+`rotate` is the conditional mutation operation in place of an unrestricted `save` that could
+consume evidence without the session concurrency boundary. `add` inserts CURRENT/version-zero
+records only; it is an internal initial-evidence insertion primitive, not session acceptance.
+Session FK and one-current uniqueness apply even to initial insertion. `get` returns detached
+snapshots. Duplicate IDs, absent sessions and invalid database constraints use the existing
+sanitized `DatabaseError` boundary.
+
+The pure domain `prepare_rotation` service requires a current, unexpired old token,
+an active unexpired session, matching
+session ownership, and token lifetimes within the session lifetime. The replacement is new,
+CURRENT/version-zero, with creation equal to the supplied consumption instant. It may not
+extend past the stable session expiry. The adapter first conditionally saves the supplied
+active session using the FL-010 repository, advancing its version. It then conditionally
+consumes the old record, comparing version, current lifecycle, empty consumption metadata
+and all immutable fields (including verifier), and advances that token version. Finally it
+inserts the replacement. The replacement FK is deferred until commit so consuming first
+releases the unique current slot. Replacements cannot reuse an existing record ID.
+
+Session-first ordering serializes against revocation and other lineage writes. Two competing
+rotations cannot both succeed. Missing token writes raise `RefreshTokenNotFound`; token CAS
+or immutable-state failures raise `RefreshTokenConflict`; session CAS retains FL-010
+`SessionNotFound`/`SessionConflict`. Supplied revoked/expired sessions raise
+`RefreshSessionUnavailable`. A stale previously-current snapshot yields conflict, not success;
+reload and verify evidence before interpreting it as confirmed reuse. Never automatically
+retry a losing CAS as accepted refresh. Fabricating a new version cannot erase consumption,
+change replacement metadata, reactivate a token or revive a revoked session through this port.
+
+Compose all work inside `Database.session()` and explicit `session.begin()`. No repository
+begins, commits, closes or independently rolls back a transaction. **Every rotation failure
+must escape the outer transaction**, including application conflicts after the session CAS;
+catching and committing partial work violates the port contract. Rollback restores both
+versions and old-token state and removes inserted replacements. Returned `RefreshRotation`
+snapshots are provisional until caller commit and must be discarded after rollback. No
+savepoint, automatic retry, independent Unit of Work or outbox is introduced.
+
+### Schema and operational limits
+
+`identity_refresh_tokens` has the nine fields above: PostgreSQL UUIDs, BYTEA, TIMESTAMPTZ,
+VARCHAR(16) and INTEGER. Only `replaced_by_id` and `consumed_at` are nullable. Named checks
+`ck_identity_refresh_tokens_{status,version,expiry,verifier,replacement,lifecycle}` enforce
+allowlisted state, version >= 0, lifetime ordering, byte bounds, no self-link and lifecycle
+field/time consistency. `pk_identity_refresh_tokens` supplies UUID lookup.
+`uq_identity_refresh_tokens_current` is the only additional index: a partial unique index
+on `session_id WHERE status = 'current'` enforcing a single lineage head, including an
+expired current record. Expiry alone does not free the slot or authorize another lineage.
+
+`fk_identity_refresh_tokens_session` and the deferred self-FK
+`fk_identity_refresh_tokens_replacement` use ON DELETE RESTRICT to preserve security evidence.
+Retention/erasure remains a future reviewed policy, not indefinite retention. The adapter
+enforces same-session replacement and terminal transitions; privileged direct SQL is not
+an application interface and could bypass temporal transition rules, as with FL-010.
+No speculative lookup indexes, verifier uniqueness or defaults are added.
+
+Revision `0004_refresh_token_rotation` follows `0003_auth_session_foundation`; the shorter
+revision name fits the existing Alembic VARCHAR(32) revision column. Upgrade is additive.
+Downgrade to FL-010 permanently destroys refresh evidence only, preserving users, roles,
+sessions, PostGIS and unrelated objects. Re-upgrade creates an empty refresh table; it
+cannot recover evidence. Prefer code rollback retaining schema when data must survive.
+See [migration operations](DATABASE.md#fl-011-refresh-token-schema-and-migration).
+
+Deferred: token protocol/generation/verification, refresh acceptance and reuse response,
+registration/login/refresh/logout/session/device HTTP endpoints, middleware, headers/cookies,
+access tokens, JWT/JWKS/signing keys, OAuth/OIDC/PKCE/provider/password ownership, hashing,
+MFA, verification/recovery, authorization/RBAC/memberships, business profiles, audit/outbox,
+mobile UI and production readiness. FL-011 requires no Redis/RabbitMQ, dependency or
+lockfile changes. No ADR is necessary: algorithm-neutral evidence and caller-owned session
+CAS implement the already prescribed FL-010 architecture. No FL-012 scope is selected.

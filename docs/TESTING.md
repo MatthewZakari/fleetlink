@@ -238,3 +238,28 @@ Run all existing backend, secrets, observability, lint/type, Compose/validator, 
 pinned secret-scan regressions. Keep the real broker regression prescribed by FL-008 even
 though sessions do not modify it. No token/replay/HTTP authentication acceptance is implied;
 those flows remain deferred and Phase 1 remains incomplete.
+
+## FL-011 refresh-token validation
+
+`make api-test` includes immutable refresh evidence, bounded verifier/representation safety,
+UTC/lifetime validation, terminal consumption, replacement linkage, expiry boundaries,
+explicit reuse outcomes and offline migration SQL. Existing layer-import tests cover the
+new pure domain/application files. There is no extra test target or new dependency.
+
+The existing fresh isolated `api-db-test-setup` / explicitly configured `api-test-db` /
+`api-db-test-drop` workflow covers refresh schema constraints, duplicates, FK restriction,
+UTC round trips, missing reads/writes, immutable metadata, conditional rotation and stale
+state, transaction composition/isolation/rollback, failed replacement insertion and competing
+rotations/revocation with exactly one winner. It asserts both versions, replacement ownership,
+retained consumption metadata and absence of orphan replacements. Rotation is the conditional
+save boundary; an unrestricted token save intentionally does not exist.
+
+Migration tests seed refresh evidence and existing user/role/session data, execute
+FL-011 -> FL-010 -> head, check refresh removal/empty recreation and preservation of the
+other data, sentinel and PostGIS, then retain existing broader baseline/base lifecycle and
+Alembic drift checks. These tests require real PostgreSQL, never SQLite. Run all prescribed
+backend, secrets/observability, lint/type, infrastructure/validator, mobile and pinned
+history/working-tree secret scans. Run the real broker regression with current private
+addresses even though FL-011 needs no broker. Clean up only the isolated database, stop
+Compose preserving volumes and confirm no test workers remain. Record actual outcomes;
+this coverage does not establish a working refresh protocol or Phase 1 completion.

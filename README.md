@@ -7,8 +7,9 @@ FleetLink is a planned production-grade Commerce + Logistics Super App connectin
 FL-009 begins Phase 1 with an Identity domain and PostgreSQL persistence foundation,
 pending independent review. Canonical UUID users have bounded account status and multiple
 platform roles. FL-010 adds immutable authentication-session lineages and PostgreSQL
-persistence, pending independent review. No authentication, authorization, credentials, tokens or Identity HTTP
-endpoints are implemented. Phase 1 is not complete. See [Identity contracts](docs/IDENTITY.md).
+persistence, pending independent review. FL-011 adds refresh-token records and atomic rotation
+persistence, also pending independent review. No authentication flow, authorization, credentials,
+token generation/verification or Identity HTTP endpoints are implemented. Phase 1 is not complete. See [Identity contracts](docs/IDENTITY.md).
 
 FL-008 adds classified secret settings, an environment snapshot source, scoped diagnostic
 redaction and checksum-pinned CI secret scanning, pending independent review. See

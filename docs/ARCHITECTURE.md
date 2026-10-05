@@ -148,3 +148,16 @@ authentication flow, authorization, provider, HTTP route or new runtime componen
 The existing transaction/metadata/privacy boundaries apply. This scoped implementation of
 the prescribed architecture needs no new ADR. Phase 1 remains incomplete. See
 [session contracts and rotation boundary](IDENTITY.md#fl-010-authentication-session-foundation).
+
+## FL-011 refresh-token persistence boundary
+
+Identity owns immutable refresh-token evidence beneath FL-010's stable session/family.
+The algorithm-neutral verifier value object and lifecycle are framework-free. A typed port
+exposes `add`, `get` and conditional `rotate`; no unrestricted lifecycle save bypasses the
+session boundary. The SQLAlchemy adapter reuses session CAS and advances token CAS in the
+same caller-owned transaction. A partial unique index enforces one current record per
+session, and a deferred replacement FK permits consume-before-insert without losing lineage.
+No new runtime service, dependency, cryptographic protocol, auth flow, HTTP surface or
+cross-context access is introduced. These choices implement FL-010's prescribed boundary;
+no new ADR is necessary. Phase 1 remains incomplete. See
+[Identity contracts](IDENTITY.md#fl-011-refresh-token-rotation-foundation).
