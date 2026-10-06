@@ -8,8 +8,11 @@ FL-009 begins Phase 1 with an Identity domain and PostgreSQL persistence foundat
 pending independent review. Canonical UUID users have bounded account status and multiple
 platform roles. FL-010 adds immutable authentication-session lineages and PostgreSQL
 persistence, pending independent review. FL-011 adds refresh-token records and atomic rotation
-persistence, also pending independent review. No authentication flow, authorization, credentials,
-token generation/verification or Identity HTTP endpoints are implemented. Phase 1 is not complete. See [Identity contracts](docs/IDENTITY.md).
+persistence, also pending independent review. FL-012 adds versioned refresh-credential
+generation and possession verification using one-way evidence, pending independent review.
+No authentication flow, authorization or Identity HTTP endpoints are implemented.
+Phase 1 is not complete. See [Identity contracts](docs/IDENTITY.md) and
+[proposed refresh protocol ADR](docs/ADR/0004-refresh-token-protocol.md).
 
 FL-008 adds classified secret settings, an environment snapshot source, scoped diagnostic
 redaction and checksum-pinned CI secret scanning, pending independent review. See

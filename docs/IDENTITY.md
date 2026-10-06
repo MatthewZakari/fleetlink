@@ -4,6 +4,10 @@ FL-009 begins Phase 1 and awaits independent review. It establishes canonical id
 account lifecycle state and platform role assignment primitives. It does not complete
 Phase 1, authentication, authorization or production Identity readiness.
 
+The sections below record successive milestone boundaries. FL-012 now supplies the
+refresh protocol previously deferred by FL-009/010/011; all authentication flows remain
+deferred. See [the protocol contract](#fl-012-refresh-token-protocol-foundation).
+
 ## Ownership and model
 
 Identity owns `User`: UUID `id`, timezone-aware UTC `created_at`, `AccountStatus`, an immutable
@@ -302,4 +306,61 @@ access tokens, JWT/JWKS/signing keys, OAuth/OIDC/PKCE/provider/password ownershi
 MFA, verification/recovery, authorization/RBAC/memberships, business profiles, audit/outbox,
 mobile UI and production readiness. FL-011 requires no Redis/RabbitMQ, dependency or
 lockfile changes. No ADR is necessary: algorithm-neutral evidence and caller-owned session
-CAS implement the already prescribed FL-010 architecture. No FL-012 scope is selected.
+CAS implement the already prescribed FL-010 architecture. FL-012 extends this boundary below.
+
+## FL-012 refresh-token protocol foundation
+
+FL-012 implements generation and possession verification only, pending independent security
+review. Phase 1 remains incomplete. [Proposed ADR-0004](ADR/0004-refresh-token-protocol.md)
+defines the exact construction, threat model, alternatives and evolution policy.
+
+`identity/application/refresh_protocol.py` uses only standard-library facilities and the
+existing domain snapshots. It imports no repository, database, HTTP, logging or telemetry
+code. It exposes synchronous typed primitives without a service container or new port:
+
+| Interface | Contract |
+| --- | --- |
+| `generate_refresh_credential()` | Returns `IssuedRefreshCredential(credential, verifier)`; independently generates a UUIDv4 and 32 cryptographically random bytes; no record, session, clock or transaction is created |
+| `RefreshCredential` | Frozen transient candidate UUID and hidden secret bytes; repr/str omit secret material and equality uses object identity |
+| `credential.reveal()` | Explicit sensitive export of the canonical wire string; never send to diagnostics or persistence |
+| `parse_refresh_credential(presented)` | Bounds and validates external input; returns a credential or fixed `InvalidRefreshCredential`; syntax alone proves nothing |
+| `derive_refresh_verifier(credential)` | Produces a domain-separated SHA-256 verifier bound to the candidate UUID |
+| `verify_refresh_credential(presented, record)` | Returns a possession boolean against a detached `RefreshTokenRecord`; malformed credentials, mismatched IDs, incorrect secrets and unsupported evidence fail closed without mutation |
+
+The wire grammar is `flrt1.<candidate-uuid>.<secret-base64url>` (placeholders, not a usable
+credential). Exactly 86 ASCII characters comprise a lowercase hyphenated UUID and 43
+unpadded base64url characters representing 32 secret bytes. Parsing rejects alternate UUID
+spellings, whitespace, padding, invalid alphabet, noncanonical unused bits, wrong sizes and
+unknown versions. Generation uses `secrets.token_bytes(32)` and `uuid4()` with no seed or
+runtime randomness override. Tests patch those calls temporarily with synthetic fixtures.
+Random-source failure raises fixed `RefreshCredentialGenerationError`, with no fallback.
+
+Evidence is the 13-byte ASCII prefix `flrt1:sha256:` followed by a 32-byte SHA-256 digest:
+45 bytes in the unchanged FL-011 `RefreshVerifier` envelope. The exact preimage is specified
+in ADR-0004. Verification requires the supported prefix/size and candidate UUID equality,
+then uses `hmac.compare_digest` on equal-length digest bytes. Public syntax/ID checks can
+short circuit; no whole-operation or database-lookup timing guarantee is claimed.
+Unknown versions/algorithms never fall back. Future versions require explicit reviewed
+allowlists and rollout/retirement policy; untagged FL-011 synthetic evidence is not v1 proof.
+
+The caller supplies `credential.candidate_id` and `issued.verifier` when constructing a
+record, along with the stable session owner and explicit lifetime. Only that record may
+cross the repository port. Generation itself never persists it or owns a transaction.
+Verification accepts consumed evidence so a future caller can distinguish proven reuse
+from an identifier-only attack. A true result is **not refresh acceptance**: it does not
+check expiry, session/account lifecycle or authorization, consume a record, rotate a token,
+revoke a family or retry a CAS. Existing FL-011 contracts remain unchanged.
+
+Raw material exists only transiently in trusted memory and explicit wire exports. Never
+serialize credentials with `asdict`, pickle, object reflection or debugger-local capture;
+never log/export secrets, verifiers, snapshots or raw SQL parameters. Repr masking is not
+memory isolation or secure erasure. No logs, metrics, spans or global secret registry are
+added. FL-007/008 diagnostic policies still apply, including their direct-SDK/debug limits.
+
+There is no schema, migration, dependency, lockfile, settings or HTTP contract change.
+Rollback retains evidence and schema; earlier code has no v1 verifier and cannot accept it.
+Authentication/registration/login/refresh/logout flows, session/device HTTP management,
+middleware, access JWTs/JWKS/signing keys, provider/password architecture, OAuth/OIDC/PKCE,
+password hashing, MFA/recovery, authorization/RBAC/memberships, business profiles, mobile UI,
+audit/outbox and Redis/RabbitMQ authentication integration remain deferred. See
+[validation](TESTING.md#fl-012-refresh-protocol-validation).

@@ -143,3 +143,18 @@ telemetry change is introduced. Phase 1 remains incomplete. See
 [refresh contracts](../../docs/IDENTITY.md#fl-011-refresh-token-rotation-foundation),
 [migration safety](../../docs/DATABASE.md#fl-011-refresh-token-schema-and-migration) and
 [validation](../../docs/TESTING.md#fl-011-refresh-token-validation).
+
+## FL-012 refresh protocol foundation
+
+`modules/identity/application/refresh_protocol.py` adds standard-library secure generation,
+strict versioned parsing, identifier-bound SHA-256 evidence and safe possession comparison.
+Generated credentials expose wire text only via explicit sensitive `reveal()`; never log,
+serialize into diagnostics or persist that text. Caller-created records contain only UUID
+lookup metadata and the 45-byte tagged verifier. Generation and verification own no
+persistence or transactions. Domain/repository contracts and Alembic head are unchanged.
+
+No dependency, lockfile, settings, HTTP endpoint, middleware or authentication flow is added.
+Phase 1 remains incomplete; implementation awaits independent security review. See
+[protocol contracts](../../docs/IDENTITY.md#fl-012-refresh-token-protocol-foundation),
+[proposed ADR-0004](../../docs/ADR/0004-refresh-token-protocol.md) and
+[validation](../../docs/TESTING.md#fl-012-refresh-protocol-validation).

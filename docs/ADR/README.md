@@ -30,3 +30,6 @@ Reference the ADR from affected docs and pull requests. A proposed ADR does not 
 
 - [ADR-0003 — Secret configuration source and diagnostic boundaries](0003-secrets-configuration-boundary.md)
   (Proposed for FL-008 independent review).
+
+- [ADR-0004 — Refresh token protocol and possession verification](0004-refresh-token-protocol.md)
+  (Proposed for FL-012 independent security review).

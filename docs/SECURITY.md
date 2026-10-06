@@ -141,3 +141,30 @@ acts on it. Confirmed reuse should revoke the relevant family under reviewed pol
 silently succeed or trigger an invented global-account policy. No protocol, credential
 verification, auth endpoint or production readiness is claimed. See
 [contracts and limits](IDENTITY.md#fl-011-refresh-token-rotation-foundation).
+
+## FL-012 refresh-credential protocol boundary
+
+FL-012 supersedes the historical protocol deferrals above, pending independent security
+review. [ADR-0004](ADR/0004-refresh-token-protocol.md) specifies a public candidate UUID
+separate from 32 OS-generated random secret bytes. The strict versioned parser rejects
+malformed, oversized, noncanonical and unsupported inputs. UUID possession alone proves
+nothing. Only version-tagged, identifier-bound SHA-256 evidence is persisted through the
+existing FL-011 envelope; no raw or reversibly encoded bearer material enters records.
+Equal-length secret-derived digests use `hmac.compare_digest`; public grammar and lookup
+metadata are not claimed timing-secret. The construction is for high-entropy random
+secrets, never passwords. No signing key, pepper or provider architecture is selected.
+
+Credentials and generation results hide raw material from repr/str. Fixed protocol errors
+never echo inputs; no logs, metrics or spans are emitted. Explicit `reveal()` returns a
+sensitive wire string for a future reviewed transport. Never persist or log it, capture
+it in diagnostics, serialize credential objects or inspect their locals in shared tooling.
+Python immutable objects do not guarantee memory erasure; restrict debugger/core-dump and
+third-party capture access. Configuration redaction does not register generated tokens.
+
+Successful verification proves possession only, even for consumed/expired evidence.
+Future callers must separately enforce lifecycle and prove possession before responding
+to reuse, then use FL-011 caller-owned atomic rotation. Stolen bearer material remains
+replayable; read-only verifier disclosure does not supply a usable credential. Full
+database-write/runtime compromise is outside this construction's protection. Authentication
+flows, abuse controls, authorization and production readiness remain deferred; Phase 1 is
+incomplete. See [Identity protocol contracts](IDENTITY.md#fl-012-refresh-token-protocol-foundation).
