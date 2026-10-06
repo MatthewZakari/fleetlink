@@ -19,6 +19,12 @@ from fleetlink.modules.identity.application.refresh_ports import (
     RefreshTokenNotFound,
     RefreshTokenRepository,
 )
+from fleetlink.modules.identity.application.refresh_protocol import (
+    RefreshCredential,
+    generate_refresh_credential,
+    parse_refresh_credential,
+    verify_refresh_credential,
+)
 from fleetlink.modules.identity.application.session_ports import SessionConflict
 from fleetlink.modules.identity.domain.auth_session import AuthenticationSession
 from fleetlink.modules.identity.domain.refresh_token import (
@@ -396,5 +402,55 @@ def test_schema(settings: Settings, migrated_database: None) -> None:
                 lambda conn: inspect(conn).get_foreign_keys("identity_refresh_tokens")
             )
             assert len(fks) == 2 and all(fk["options"]["ondelete"] == "RESTRICT" for fk in fks)
+
+    asyncio.run(run())
+
+
+def test_protocol_evidence_round_trip_without_bearer_persistence(
+    settings: Settings, migrated_database: None
+) -> None:
+    async def run() -> None:
+        async with database_for_test(settings, seed=False) as database:
+            issued = generate_refresh_credential()
+            replacement = generate_refresh_credential()
+            candidate = parse_refresh_credential(issued.credential.reveal())
+            token = replace(TOKEN, id=candidate.candidate_id, verifier=issued.verifier)
+            next_token = replace(
+                NEXT, id=replacement.credential.candidate_id, verifier=replacement.verifier
+            )
+            async with database.session() as session, session.begin():
+                repository = SqlAlchemyRefreshTokenRepository(session)
+                # Generation produces evidence but never inserts anything.
+                assert await repository.get(candidate.candidate_id) is None
+                await SqlAlchemyUserRepository(session).add(USER)
+                await SqlAlchemyAuthenticationSessionRepository(session).add(SESSION)
+                await repository.add(token)
+            async with database.session() as session, session.begin():
+                repository = SqlAlchemyRefreshTokenRepository(session)
+                loaded = await repository.get(candidate.candidate_id)
+                assert loaded == token
+                stored = await session.scalar(select(Record.verifier).where(Record.id == token.id))
+                assert stored == issued.verifier.value and len(stored) == 45
+                assert bool(stored != issued.credential.reveal().encode())
+                wrong = RefreshCredential(token.id, bytes(range(32)))
+                assert not verify_refresh_credential(wrong.reveal(), loaded)
+                assert await repository.get(token.id) == token
+                assert (
+                    await SqlAlchemyAuthenticationSessionRepository(session).get(SESSION.id)
+                    == SESSION
+                )
+                assert verify_refresh_credential(issued.credential.reveal(), loaded)
+                # Explicit caller-owned persistence remains a separate operation.
+                rotated = await repository.rotate(loaded, next_token, SESSION, at=AT)
+            async with database.session() as session, session.begin():
+                repository = SqlAlchemyRefreshTokenRepository(session)
+                consumed = await repository.get(token.id)
+                current = await repository.get(next_token.id)
+                assert consumed == rotated.consumed and current == next_token
+                assert verify_refresh_credential(issued.credential.reveal(), consumed)
+                assert verify_refresh_credential(replacement.credential.reveal(), current)
+                assert not verify_refresh_credential(issued.credential.reveal(), current)
+                with pytest.raises(RefreshTokenReuse):
+                    consumed.require_current(AT)
 
     asyncio.run(run())

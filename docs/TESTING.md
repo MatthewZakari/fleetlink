@@ -263,3 +263,26 @@ history/working-tree secret scans. Run the real broker regression with current p
 addresses even though FL-011 needs no broker. Clean up only the isolated database, stop
 Compose preserving volumes and confirm no test workers remain. Record actual outcomes;
 this coverage does not establish a working refresh protocol or Phase 1 completion.
+
+## FL-012 refresh protocol validation
+
+`make api-test` includes `tests/test_refresh_protocol.py`: secure generation/uniqueness,
+UUID and secret separation, verifier derivation/bounds, generate/parse/verify round trips,
+identifier binding, incorrect-secret rejection, malformed/noncanonical/oversized input,
+invalid UUID/encoding, empty/truncated secrets, unsupported versions and stored envelopes,
+equal-length safe digest comparison, repr/str and exception safety, deterministic patched
+randomness, entropy failure, no generation persistence and no verification mutation.
+Vectors assemble synthetic bytes in memory; never snapshot or print generated wire text.
+Scoped monkeypatching supplies deterministic test seams without production seed/settings.
+
+The existing inner-layer import gate covers the protocol module. Run `make api-lint`,
+`make api-typecheck`, `make api-test-secrets`, `make api-test-observability` and
+`make secret-scan`; existing tests are preserved. Offline migration tests and real
+PostgreSQL upgrade/downgrade/drift checks remain required even though FL-012 adds no schema.
+The isolated database suite additionally persists generated evidence, reloads/verifies it,
+checks failure leaves state unchanged, and verifies both consumed and replacement evidence
+after caller-owned rotation. Use the unchanged fresh setup/test/drop workflow above.
+
+Keep the prescribed broker, Compose/validator and mobile regression gates, clean up only
+test-owned resources, and record exact commands/results and unavailable tooling separately.
+Passing tests establishes protocol behavior, not authentication flow or Phase 1 completion.

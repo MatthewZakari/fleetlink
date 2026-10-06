@@ -161,3 +161,19 @@ No new runtime service, dependency, cryptographic protocol, auth flow, HTTP surf
 cross-context access is introduced. These choices implement FL-010's prescribed boundary;
 no new ADR is necessary. Phase 1 remains incomplete. See
 [Identity contracts](IDENTITY.md#fl-011-refresh-token-rotation-foundation).
+
+## FL-012 refresh-token protocol boundary
+
+Identity's application layer now supplies versioned credential generation, strict parsing,
+one-way derivation and possession verification above FL-011. This small module uses only
+standard-library `secrets`, SHA-256 and safe digest comparison plus existing domain types;
+no framework adapter or speculative abstraction is required. Domain snapshots and
+repository contracts remain unchanged. Generation returns transient sensitive material
+and a bounded verifier, without creating records, sessions or transactions. Verification
+is a pure possession check, including against consumed evidence, not acceptance or reuse
+response. Repositories continue to perform no cryptography.
+
+[Proposed ADR-0004](ADR/0004-refresh-token-protocol.md) records wire/storage versioning,
+identifier binding, threat model and safe diagnostic boundaries. No schema, dependency,
+provider choice, HTTP flow, middleware, access JWT or runtime service is introduced.
+Phase 1 remains incomplete. See [protocol contracts](IDENTITY.md#fl-012-refresh-token-protocol-foundation).
