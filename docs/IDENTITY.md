@@ -4,9 +4,10 @@ FL-009 begins Phase 1 and awaits independent review. It establishes canonical id
 account lifecycle state and platform role assignment primitives. It does not complete
 Phase 1, authentication, authorization or production Identity readiness.
 
-The sections below record successive milestone boundaries. FL-012 now supplies the
-refresh protocol previously deferred by FL-009/010/011; all authentication flows remain
-deferred. See [the protocol contract](#fl-012-refresh-token-protocol-foundation).
+The sections below record successive milestone boundaries. FL-012 supplies the
+refresh protocol previously deferred by FL-009/010/011. FL-013 composes the internal
+refresh operation below; login/registration and all HTTP authentication flows remain deferred.
+See [the protocol contract](#fl-012-refresh-token-protocol-foundation).
 
 ## Ownership and model
 
@@ -364,3 +365,84 @@ middleware, access JWTs/JWKS/signing keys, provider/password architecture, OAuth
 password hashing, MFA/recovery, authorization/RBAC/memberships, business profiles, mobile UI,
 audit/outbox and Redis/RabbitMQ authentication integration remain deferred. See
 [validation](TESTING.md#fl-012-refresh-protocol-validation).
+
+## FL-013 refresh authentication service
+
+`identity/application/refresh_authentication.py` composes the existing typed ports and
+FL-012 protocol. It adds no transport, dependency, setting or migration. Phase 1 remains
+incomplete; this implementation awaits independent review and does not establish production
+Identity readiness. No login/registration HTTP flow, HTTP refresh/logout, access JWT/JWKS,
+authentication middleware, provider/password architecture, OAuth/OIDC/PKCE, authorization,
+MFA/recovery or mobile authentication UI is implemented.
+
+`authenticate_refresh(presented, at=..., tokens=..., sessions=..., users=...)` requires
+explicit aware time (normalized to UTC) and adapters bound to the **same caller-owned
+transaction**. Parsing rejects malformed/unsupported input. Only the public candidate UUID
+is used for lookup. Missing evidence and incorrect possession cause no mutation. FL-012
+verification against the detached record must succeed **before** consumed status is
+interpreted as confirmed reuse. Candidate ID possession alone can never revoke a session.
+
+CURRENT evidence must pass `require_current(at)` before session/account loading or generation.
+The owning session must match, be active and unexpired, with compatible token lifetime.
+`require_rotation_session` extracts the existing FL-011 lineage checks so both orchestration
+and `prepare_rotation` use one authoritative rule. The owning user must exist, match the
+session owner and be ACTIVE. SUSPENDED and DISABLED are rejected. This is account lifecycle
+eligibility, not authorization; roles are neither interpreted nor copied into credentials.
+Account status is checked from the repository snapshot; this milestone adds no account-wide
+locking or atomic account-status-change/revocation policy.
+
+### Absolute, non-sliding expiry
+
+For every accepted CURRENT rotation, replacement creation is the explicit operation time
+and replacement expiry is exactly the presented current record's `expires_at`. At or after
+that expiry rotation fails. Rotation never extends expiry to the session expiry, computes
+`now + duration`, introduces a TTL setting or creates sliding sessions. The stable session
+expiry is an independent upper bound. This preserves the lineage's already established
+absolute credential lifetime; initial lifetime selection remains outside FL-013.
+
+Generation uses FL-012 only after lifecycle checks. Only candidate UUID, derived verifier,
+session owner and explicit times enter replacement evidence. FL-011 `rotate` performs
+session CAS, old-token consumption and replacement insertion; the service adds no SQL or
+retry logic. A stale version is a conflict, never an automatically retried success.
+
+### Confirmed reuse and transaction outcomes
+
+Correct possession of CONSUMED evidence ensures its stable session/family is revoked and
+returns `ProvisionalRefreshReuse`. An ACTIVE session uses terminal `session.revoke()` plus
+existing optimistic `sessions.save()`, even when the record/session has expired. An already
+REVOKED session requires no additional persistence mutation; its version remains unchanged.
+It issues no replacement and preserves consumed history. It does not load or mutate
+account state, remove roles, revoke other devices, disable/suspend users or initiate recovery.
+A revocation CAS conflict propagates and must roll back; no automatic retry is performed.
+
+A normal rotation returns `ProvisionalRefresh`, containing only a hidden credential wrapper
+and explicit sensitive `reveal()` export. **Neither result is final until the surrounding
+transaction commits.** The service cannot observe commit. Keep the result inside trusted
+application memory, exit the caller's transaction and Database session boundary successfully,
+and only then issue the replacement or treat replay revocation as durable. Discard results
+on rollback, cancellation or commit failure. Never issue a credential before commit.
+For confirmed reuse, return normally through the transaction to commit revocation; do not
+raise a denial exception inside it and inadvertently undo the response.
+
+Every exception must escape the transaction and `Database.session()` boundary. The latter
+sanitizes driver/constraint/commit failures into existing `DatabaseError`. Repositories and
+the service never begin, commit, close or independently roll back; no Unit of Work is added.
+Internal distinctions reuse `InvalidRefreshCredential`, `RefreshTokenNotFound`,
+`RefreshTokenExpired`, `SessionNotFound`, `RefreshSessionUnavailable`, `SessionConflict`,
+`RefreshTokenConflict` and `InvalidRefreshRotation`. Only possession failure and account
+unavailability add fixed-message exceptions. Generation errors retain the FL-012 contract.
+These distinctions have no public/HTTP mapping and must not become enumeration responses.
+
+Session-first CAS serializes competing rotations and revocation. Exactly one writer from
+the same session version can win; a rotation that loses to revocation cannot commit. If
+rotation wins first, a competing stale revocation conflicts; a subsequent deliberate
+revocation invalidates the replacement. Confirmed reuse never reactivates the lineage.
+Failed insertion or replay response/commit rolls back all writes in that transaction.
+
+No logs, spans, metrics, identifier labels, raw credential persistence, SQL parameter
+capture or global redaction registration is added. Repr/str omit credential material;
+arbitrary serialization, debugger locals and process memory remain sensitive as in FL-012.
+Rollback restores prior application code while retaining schema and evidence, including
+committed revocations. Alembic head remains `0004_refresh_token_rotation`.
+See [ADR-0004](ADR/0004-refresh-token-protocol.md) (still Proposed) and
+[validation](TESTING.md#fl-013-refresh-authentication-validation).

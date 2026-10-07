@@ -1,9 +1,9 @@
 # ADR-0004 — Refresh token protocol and possession verification
 
-- Status: Proposed (FL-012 implementation; independent security review pending).
+- Status: Proposed (FL-012/FL-013 implementation; independent security review pending).
 - Date: 2026-10-06.
 - Owners/reviewers: Identity maintainers and independent security reviewer.
-- Related task: FL-012; builds on FL-010 and FL-011.
+- Related tasks: FL-012 and FL-013; builds on FL-010 and FL-011.
 
 ## Context
 
@@ -79,11 +79,41 @@ to another record from making that credential valid there. Database write compro
 runtime compromise and stolen bearer material are outside the protection of one-way storage.
 
 A stolen credential is replayable. Possession verification deliberately also works against
-consumed evidence: a future caller must prove possession before interpreting FL-011 reuse
-and applying a separately reviewed family-revocation policy. A true result does not check
-session/account state, expiry, currentness or authorization and never rotates/revokes anything.
-FL-011 lifecycle checks and session/token CAS remain mandatory in a future acceptance flow;
+consumed evidence: callers must prove possession before interpreting FL-011 reuse.
+FL-013 implements the narrowly scoped response below, pending independent security review.
+A true verification result does not check session/account state, expiry, currentness or
+authorization and never rotates/revokes anything.
+FL-011 lifecycle checks and session/token CAS remain mandatory in the FL-013 acceptance flow;
 never automatically retry a losing CAS as an accepted refresh.
+
+## FL-013 application composition and replay response
+
+FL-013 implements the stable-session/family revocation boundary prescribed by FL-011,
+using existing session revoke/save CAS for ACTIVE sessions after FL-012 proof of possession,
+even if expired. Already-revoked families require no additional persistence mutation or
+version increment. Incorrect secrets
+and candidate UUIDs alone never trigger revocation. Confirmed consumed-credential reuse
+revokes only its owning stable session/family, preserves evidence and never issues a new
+credential. It cannot reactivate a session, mutate account state/roles or revoke unrelated
+sessions. Conflicts propagate without automatic retry. This implements the prescribed
+composition; it does not mark replay policy independently security-reviewed.
+
+The explicitly approved FL-013 lifetime decision is **absolute, non-sliding expiration**:
+replacement creation equals the explicit current operation time, and replacement expiry
+equals the presented CURRENT record's expiry. Reject at or after that expiry and separately
+check session expiry. Extending to session expiry, `now + duration`, configurable refresh
+TTL and sliding sessions are rejected because they would expand existing lifetime policy.
+Initial lifetime selection remains outside this milestone. ACTIVE accounts alone may
+proceed; SUSPENDED/DISABLED accounts cannot refresh. Status is not authorization.
+
+The caller owns one database transaction. A normal `ProvisionalRefresh` hides its credential
+and permits only explicit sensitive export after commit. `ProvisionalRefreshReuse` is a
+distinct denial outcome with no credential, returned normally so revocation can commit.
+Neither outcome establishes issuance/durable response until commit; discard both on failure.
+Exceptions escape the transaction and existing sanitized database boundary. Failed insertion
+or replay response/commit must leave no partial writes. No generic Unit of Work or schema
+change is needed. Tests cover real PostgreSQL competing rotations, revocation races and
+rollback. Independent security review remains required; status stays Proposed.
 
 ## Diagnostics and logging restrictions
 
@@ -121,7 +151,8 @@ Rollback restores prior code while retaining schema/evidence; older code cannot 
 and must not treat arbitrary verifier bytes as proof. Future protocol rollouts must account
 for active credential lifetimes before retiring a verifier implementation.
 
-This is a generation/verification foundation only. Authentication flows, HTTP/middleware,
+FL-012 is the generation/verification foundation; FL-013 adds internal refresh orchestration.
+Login/registration and HTTP authentication flows, middleware,
 access JWTs, signing keys, OAuth/OIDC/PKCE, passwords, MFA/recovery, authorization, mobile UI,
 audit/outbox and Redis/RabbitMQ authentication work remain deferred. Provider architecture
 is not selected here. Phase 1 remains incomplete.

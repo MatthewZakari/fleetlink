@@ -177,3 +177,29 @@ response. Repositories continue to perform no cryptography.
 identifier binding, threat model and safe diagnostic boundaries. No schema, dependency,
 provider choice, HTTP flow, middleware, access JWT or runtime service is introduced.
 Phase 1 remains incomplete. See [protocol contracts](IDENTITY.md#fl-012-refresh-token-protocol-foundation).
+
+## FL-013 refresh application boundary
+
+FL-013 adds Identity application orchestration using existing protocol and repository ports.
+Possession verification precedes consumed-token replay interpretation. CURRENT evidence,
+active/unexpired owning sessions and ACTIVE accounts are required for normal rotation;
+SUSPENDED/DISABLED accounts cannot refresh. Roles grant no authorization here.
+Replacement expiry equals the current record's absolute expiry, never a sliding duration
+or extension to session expiry. Confirmed reuse revokes only its stable session/family,
+never the account, roles or unrelated sessions. Existing session/token CAS is reused with
+no automatic conflict retry and no cryptography in repositories.
+
+The caller owns the transaction. `ProvisionalRefresh` exposes sensitive wire text only via
+explicit `reveal()` after commit; `ProvisionalRefreshReuse` returns denial without a
+credential so revocation can commit. Discard either result on rollback/commit failure.
+All exceptions must escape the transaction and existing sanitized database boundary.
+No logs, telemetry, identifier metric labels, raw credential persistence, SQL parameter
+capture or global generated-secret registry is added. Repr/str hide sensitive material;
+never serialize these objects or capture their internals in diagnostics.
+
+No dependency, TTL setting, schema or migration is added; Alembic stays at
+`0004_refresh_token_rotation`. ADR-0004 remains Proposed pending independent security review.
+Phase 1 remains incomplete. No login/registration transport, HTTP refresh/logout, access
+JWT/JWKS, authentication middleware, provider/password architecture, OAuth/OIDC/PKCE,
+passwords, MFA/recovery, authorization or mobile auth UI is implemented. FL-013 does not
+establish production Identity readiness. See [the complete application/transaction contract](IDENTITY.md#fl-013-refresh-authentication-service).
