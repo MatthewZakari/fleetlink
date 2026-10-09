@@ -45,3 +45,11 @@ Phase 1 remains incomplete. No login/registration transport, HTTP refresh/logout
 JWT/JWKS, authentication middleware, provider/password architecture, OAuth/OIDC/PKCE,
 passwords, MFA/recovery, authorization or mobile auth UI is implemented. FL-013 does not
 establish production Identity readiness. See [the complete application/transaction contract](../../../../../docs/IDENTITY.md#fl-013-refresh-authentication-service).
+
+## FL-014 interface boundary
+
+`identity/interface/http` supplies an unmounted route adapter, fixed typed authentication
+problems and native request composition. An explicit operation runner commits before returning
+results and rolls back failures; repositories and domain objects retain their existing
+contracts. Only tests mount demonstration routes. No public Identity workflow is implemented.
+See [usage and limitations](../../../../../docs/IDENTITY.md#fl-014-http-boundary-foundation).

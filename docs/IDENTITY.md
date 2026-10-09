@@ -7,6 +7,7 @@ Phase 1, authentication, authorization or production Identity readiness.
 The sections below record successive milestone boundaries. FL-012 supplies the
 refresh protocol previously deferred by FL-009/010/011. FL-013 composes the internal
 refresh operation below; login/registration and all HTTP authentication flows remain deferred.
+FL-014 adds the unmounted [HTTP boundary foundation](#fl-014-http-boundary-foundation).
 See [the protocol contract](#fl-012-refresh-token-protocol-foundation).
 
 ## Ownership and model
@@ -446,3 +447,100 @@ Rollback restores prior application code while retaining schema and evidence, in
 committed revocations. Alembic head remains `0004_refresh_token_rotation`.
 See [ADR-0004](ADR/0004-refresh-token-protocol.md) (still Proposed) and
 [validation](TESTING.md#fl-013-refresh-authentication-validation).
+
+## FL-014 HTTP boundary foundation
+
+FL-014 adds `modules/identity/interface/http`, pending independent review. It is an
+adapter foundation, not an authentication API. No router is mounted by `create_app`;
+`/health`, `/ready`, `/openapi.json` and their contracts remain unchanged. Domain,
+application, protocol and persistence semantics are unchanged. ADR-0004 stays Proposed.
+
+### Composition and transaction ownership
+
+Future explicitly authorized handlers inject `IdentityOperationDependency`. Native FastAPI
+caching supplies one `IdentityOperation` per request from the existing `get_database`
+dependency; disabled/out-of-lifespan resources fail through Platform's sanitized 500.
+Dependency resolution opens no session or connection, so rejected request bodies do not
+start transactions. There is no global container, new engine or import-time I/O.
+
+The handler calls `await operation.execute(work)` exactly once. The async callback receives
+`IdentityServices`: the existing user, authentication-session and refresh-token ports, all
+bound to the same session, plus a thin call to the existing `authenticate_refresh` service.
+The callback composes only Identity-owned application work. It must propagate every failure,
+never independently commit/rollback, retain ports, spawn background work, send a response,
+serialize domain snapshots or reveal credentials. A second execution on the same request
+object fails rather than creating separately committed partial operations or retrying a CAS.
+
+`IdentityOperation` is the HTTP caller/transaction owner. It acquires `Database.session()`,
+explicitly begins, invokes the callback, commits once on normal completion, and closes the
+session before returning the result. Callback/commit exceptions and cancellation trigger
+shielded rollback; the existing session boundary shields close and sanitizes driver errors.
+Begin failures still pass through session cleanup. Repositories and domain objects remain
+unchanged and never commit. No generic Unit of Work, savepoint or retry policy is introduced.
+
+Only after `execute` returns may a future authorized endpoint explicitly export sensitive
+wire material. `ProvisionalRefreshReuse` must return normally from the callback so its
+revocation commits; translate it to `AuthenticationDenied` **after** `execute` returns.
+Never raise that transport denial inside the callback for a successful reuse response.
+Failed commits return no result to the handler, including results with provisional credentials
+or revocations. The adapter does not reinterpret expiry, account state or replay policy.
+
+The operation callback is trusted application composition, not a sandbox: Python cannot
+prevent it from retaining/exporting values early. Endpoint review must enforce this contract.
+Construct and validate ordinary safe response projections inside the callback when possible.
+A response serialization or network failure after commit cannot undo committed work. A lost
+commit acknowledgement can leave durability uncertain; return an error, discard the result
+and never automatically retry refresh acceptance. Future endpoints need separately reviewed
+reconciliation/idempotency behavior. This foundation does not claim atomic database-and-network
+issuance, successful delivery, or rollback of an already committed transaction.
+
+### Error and schema contract
+
+Future authentication routers use `APIRouter(route_class=IdentityRoute,
+responses=identity_problem_responses())`. This factory combination is demonstrated only in
+`apps/api/tests/test_identity_http.py` and `apps/api/tests_db/test_identity_http_postgres.py`.
+No production sample route, login DTO, token response model or OpenAPI security scheme is added.
+Future endpoint work must define strict, bounded request DTOs (`extra="forbid"`), explicit
+safe response models, credential transport and the applicable `WWW-Authenticate` challenge;
+FL-014 does not select or implement a public authentication protocol.
+
+The adapter reuses Platform's seven-field `application/problem+json` envelope, URN instance,
+correlation validation, no-store and other security headers. `AuthenticationProblem` narrows
+status/title/code/detail to a typed fixed denial. No optional field diagnostics are emitted.
+
+| Condition | Status | Code | Detail |
+| --- | --- | --- | --- |
+| Allowlisted authentication/application/domain denial | 401 | `authentication_failed` | `Authentication failed.` |
+| Request validation, including unknown writable fields in strict DTOs | 422 | `validation_error` | `Request validation failed.` |
+| Database, commit/rollback/close, generation, response validation or unknown failure | 500 | `internal_error` | `An unexpected error occurred.` |
+
+The denial allowlist includes malformed refresh credentials, failed possession, unavailable
+accounts/sessions, missing users/sessions/tokens, expiry, reuse and optimistic conflicts,
+plus the explicit post-commit transport denial. All share one response shape and message;
+no account existence, lifecycle state, verifier, SQL, exception text or conflict detail is
+exposed. Conflict exceptions still roll back and are never retried. `ValueError` and invalid
+internal rotation construction are not blindly classified as user input errors. Credential
+generation errors remain server failures. Unknown exceptions retain Platform handling and
+privacy-safe logging. Framework HTTP exceptions retain their existing sanitized contracts.
+
+This allowlist is for the authentication boundary only. Future authorized Identity management
+APIs need their own disclosure-safe 403/404/409 contracts. Uniform error content does not
+establish timing uniformity, enumeration resistance under timing analysis or abuse protection.
+
+### Privacy, compatibility and deferred work
+
+There are no new logs, telemetry attributes, secret registries or configuration fields.
+Never capture request bodies, headers, raw credentials, evidence, snapshots, SQL parameters
+or arbitrary exception diagnostics. FL-007/008 structural capture bounds remain authoritative.
+The test-only demonstrations use synthetic data and never expose raw credentials over HTTP.
+
+There are no migrations, production/development dependencies or lockfile changes. Alembic
+head remains `0004_refresh_token_rotation`. Rollback removes this unmounted package and its
+tests/docs without changing persisted data; no deployed caller or schema migration is needed.
+This follows existing Clean Architecture/native DI and caller-owned transaction conventions,
+so no new architectural deviation ADR is required. ADR-0004 remains Proposed.
+
+Public login, registration, refresh, logout, token validation, JWT/JWKS, authentication
+middleware, passwords/providers, OAuth/OIDC/PKCE, MFA, Flutter auth, authorization, rate
+limiting, outbox and production readiness remain deferred. Phase 1 remains incomplete.
+See [validation](TESTING.md#fl-014-http-boundary-validation).

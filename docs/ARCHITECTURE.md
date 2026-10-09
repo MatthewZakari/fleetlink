@@ -203,3 +203,19 @@ Phase 1 remains incomplete. No login/registration transport, HTTP refresh/logout
 JWT/JWKS, authentication middleware, provider/password architecture, OAuth/OIDC/PKCE,
 passwords, MFA/recovery, authorization or mobile auth UI is implemented. FL-013 does not
 establish production Identity readiness. See [the complete application/transaction contract](IDENTITY.md#fl-013-refresh-authentication-service).
+
+## FL-014 Identity HTTP boundary
+
+Identity's `interface/http` package composes existing application ports and adapters through
+native request-cached dependencies. Its explicit, single-use operation runner owns one
+session/transaction and returns results only after commit and cleanup; it does not move
+transaction ownership into repositories or domain objects. Route-local authentication error
+mapping runs after failures escape the transaction. Platform retains validation, unexpected
+error, correlation, telemetry and redaction handling. No global exception registration,
+production router, new container, generic Unit of Work or dependency is introduced.
+
+Only test-mounted routes demonstrate the boundary, including real PostgreSQL commit-time
+failure and committed reuse denial. Existing public probes/OpenAPI remain unchanged.
+This extends the prescribed architecture without a significant deviation requiring an ADR.
+ADR-0004 remains Proposed, independent review is pending, and Phase 1 remains incomplete.
+See [composition, error contracts and post-commit limits](IDENTITY.md#fl-014-http-boundary-foundation).

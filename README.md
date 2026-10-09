@@ -15,6 +15,9 @@ possession-confirmed session/family revocation, pending independent review. Resu
 provisional until caller commit. No login/registration HTTP flow, HTTP refresh/logout,
 access JWT, authentication middleware, provider/password architecture, authorization or
 MFA/recovery is implemented. This is not production Identity readiness.
+FL-014 adds an unmounted HTTP boundary with sanitized authentication errors and explicit
+commit-before-result composition, pending independent review. Demonstration routes exist
+only in tests; the shipped API still exposes only technical probes and OpenAPI.
 Phase 1 is not complete. See [Identity contracts](docs/IDENTITY.md) and
 [proposed refresh protocol ADR](docs/ADR/0004-refresh-token-protocol.md).
 
