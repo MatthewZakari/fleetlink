@@ -10,7 +10,11 @@ platform roles. FL-010 adds immutable authentication-session lineages and Postgr
 persistence, pending independent review. FL-011 adds refresh-token records and atomic rotation
 persistence, also pending independent review. FL-012 adds versioned refresh-credential
 generation and possession verification using one-way evidence, pending independent review.
-No authentication flow, authorization or Identity HTTP endpoints are implemented.
+FL-013 composes internal refresh acceptance with absolute, non-sliding expiry and
+possession-confirmed session/family revocation, pending independent review. Results are
+provisional until caller commit. No login/registration HTTP flow, HTTP refresh/logout,
+access JWT, authentication middleware, provider/password architecture, authorization or
+MFA/recovery is implemented. This is not production Identity readiness.
 Phase 1 is not complete. See [Identity contracts](docs/IDENTITY.md) and
 [proposed refresh protocol ADR](docs/ADR/0004-refresh-token-protocol.md).
 

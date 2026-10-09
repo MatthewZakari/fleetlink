@@ -115,6 +115,26 @@ def prepare_rotation(
 ) -> RefreshTokenRecord:
     """Validate lineage/lifetime invariants and produce provisional consumed evidence."""
     consumed = token.consume(replacement.id, at)
+    require_rotation_session(token, session, at=at)
+    if (
+        replacement.session_id != session.id
+        or replacement.status is not RefreshTokenStatus.CURRENT
+        or replacement.version != 0
+        or replacement.created_at != consumed.consumed_at
+        or replacement.expires_at > session.expires_at
+    ):
+        raise InvalidRefreshRotation("Rotation snapshots are incompatible")
+    return consumed
+
+
+def require_rotation_session(
+    token: RefreshTokenRecord,
+    session: AuthenticationSession,
+    *,
+    at: datetime,
+) -> None:
+    """Shared lineage checks, also usable before generating replacement material."""
+    at = _utc(at)
     if (
         session.status is not SessionStatus.ACTIVE
         or session.is_expired(at)
@@ -123,13 +143,7 @@ def prepare_rotation(
         raise RefreshSessionUnavailable("Session is unavailable for rotation")
     if (
         token.session_id != session.id
-        or replacement.session_id != session.id
-        or replacement.status is not RefreshTokenStatus.CURRENT
-        or replacement.version != 0
-        or replacement.created_at != consumed.consumed_at
         or token.created_at < session.created_at
         or token.expires_at > session.expires_at
-        or replacement.expires_at > session.expires_at
     ):
         raise InvalidRefreshRotation("Rotation snapshots are incompatible")
-    return consumed

@@ -286,3 +286,28 @@ after caller-owned rotation. Use the unchanged fresh setup/test/drop workflow ab
 Keep the prescribed broker, Compose/validator and mobile regression gates, clean up only
 test-owned resources, and record exact commands/results and unavailable tooling separately.
 Passing tests establishes protocol behavior, not authentication flow or Phase 1 completion.
+
+## FL-013 refresh authentication validation
+
+Run focused orchestration tests with
+`uv run --project apps/api --locked pytest apps/api/tests/test_refresh_authentication.py`.
+They cover malformed/unsupported/unknown credentials, possession before replay, candidate
+ID insufficiency, current expiry boundaries, session ownership/lifetime, account lifecycle,
+absolute non-sliding replacement expiry, FL-012 evidence, safe provisional results,
+generation failure, conflict propagation without retries and absence of service diagnostics.
+Existing protocol and import-boundary tests remain required.
+
+`tests_db/test_refresh_authentication_postgres.py` runs only through the guarded fresh
+`fleetlink_test_fl005` workflow above. It verifies committed replacement evidence, wrong-secret
+nonmutation, scoped replay revocation/history retention, simultaneous refresh with one winner,
+refresh versus revocation (both forced commit orders and a competing race), failed insertion
+rollback, caller rollback, replay commit failure and replay CAS conflict. Test barriers/events
+coordinate real independent PostgreSQL transactions; mocks/SQLite do not establish these claims.
+A rotation winner followed by deliberate revocation cannot use its replacement to refresh.
+Migration tests remain unchanged and Alembic head must remain `0004_refresh_token_rotation`.
+
+Run all backend, secrets, observability, lint/type, Compose/validator, Flutter and pinned
+Gitleaks history/directory gates. Run the real broker regression with dynamically resolved
+private addresses when needed. Record exact results; clean up only the isolated test database,
+verify development remains, then stop Compose preserving volumes. These checks do not
+establish production Identity readiness or independent security acceptance.
