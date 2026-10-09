@@ -194,3 +194,25 @@ Phase 1 remains incomplete. No login/registration transport, HTTP refresh/logout
 JWT/JWKS, authentication middleware, provider/password architecture, OAuth/OIDC/PKCE,
 passwords, MFA/recovery, authorization or mobile auth UI is implemented. FL-013 does not
 establish production Identity readiness. See [the complete application/transaction contract](IDENTITY.md#fl-013-refresh-authentication-service).
+
+## FL-014 unmounted HTTP authentication boundary
+
+No public Identity route is added. The adapter collapses allowlisted missing/invalid,
+expired/reused, account/session-unavailable and optimistic-conflict failures into one fixed
+401 Problem without internal details. Validation inputs are omitted; unexpected failures,
+including commit and cleanup failures, use Platform's sanitized 500. Exception mapping is
+route-local and does not change existing probe or unrelated HTTP behavior.
+
+The operation boundary commits once before returning provisional results to a handler;
+operation/commit failures roll back and never release a successful result. Confirmed reuse
+must complete normally through commit before becoming a denial. Tests exercise these rules
+through test-mounted routes, including PostgreSQL deferred constraints, and check credential,
+header, body and exception-message omission from controlled diagnostics. No new capture or
+redaction registry is added. Uniform response content does not guarantee uniform timing.
+Post-commit response failure and uncertain commit acknowledgement require future endpoint
+policy; do not retry acceptance automatically. See the
+[complete boundary contract](IDENTITY.md#fl-014-http-boundary-foundation).
+
+Provider architecture, public auth challenges/transport, access tokens, password flows,
+authorization, rate limits and production hardening remain deferred. ADR-0004 remains Proposed;
+FL-014 awaits independent review and does not complete Phase 1.

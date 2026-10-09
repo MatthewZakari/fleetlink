@@ -311,3 +311,28 @@ Gitleaks history/directory gates. Run the real broker regression with dynamicall
 private addresses when needed. Record exact results; clean up only the isolated test database,
 verify development remains, then stop Compose preserving volumes. These checks do not
 establish production Identity readiness or independent security acceptance.
+
+## FL-014 HTTP boundary validation
+
+`apps/api/tests/test_identity_http.py` mounts demonstration routes only on isolated app
+instances. It covers strict request DTOs and response schemas, native dependency caching and
+new per-request operation objects, shared-session repository/service composition, commit-once
+ordering, rollback and teardown, cancellation, commit/rollback/close failures, sanitized
+expected and unexpected errors, post-commit reuse denial, and logs/response privacy.
+It checks typed problem OpenAPI content, unchanged probes and absence of production Identity
+routes. Response validation after commit deliberately demonstrates that a later transport
+failure cannot reverse durable database state.
+
+`apps/api/tests_db/test_identity_http_postgres.py` uses only the guarded
+`fleetlink_test_fl005` fixtures. Test-mounted routes invoke existing refresh orchestration,
+assert committed absolute-expiry rotation, rolled-back composed mutations, deferred-FK
+commit failure without successful HTTP output, durable reuse revocation with denial, and
+rolled-back reuse revocation when commit fails. Independent reads verify all persisted state;
+checked-out connections must return to zero. No SQLite or development database substitute is
+permitted. Use the fresh test database setup/cleanup process above and preserve development
+volumes; never use `infra-reset`.
+
+Run `make api-test`, `make api-test-secrets`, `make api-test-observability`, `make api-lint`,
+`make api-typecheck`, isolated `make api-test-db`, `make infra-config`, `make secret-scan`
+and `git diff --check`. Broker integration and Flutter checks are required if those components
+change; FL-014 changes neither. Record executed results separately from these required gates.

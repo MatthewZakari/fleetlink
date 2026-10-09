@@ -53,3 +53,20 @@ internal_error (other HTTP exceptions use http_<status>). Framework exception de
 and rejected validation inputs are omitted. All HTTP responses include nosniff,
 DENY framing, no-referrer and no-store headers; see the [API foundation](../apps/api/README.md)
 for exact names, correlation bounds and proxy assumptions. No CORS permission is enabled.
+
+## FL-014 unmounted Identity contract
+
+The Identity HTTP foundation registers no public endpoints or security schemes. Future
+explicitly authorized authentication routes can opt into `IdentityRoute` and
+`identity_problem_responses()`: allowlisted authentication denials share typed 401
+`authentication_failed` / `Authentication failed.` in the existing seven-field Problem
+envelope. Missing, invalid, expired, unavailable, reused and conflicting authentication
+state is not distinguished publicly. Validation/unknown errors retain existing 422/500
+contracts; no framework inputs or internal messages are reflected.
+
+Native request composition supplies a single explicit operation whose result is available
+only after commit and session cleanup. Convert confirmed reuse into denial after its
+revocation commits. Future routes must define bounded strict request/response DTOs, public
+credential transport and appropriate authentication challenges before exposure. No login,
+registration, refresh, logout or validation route is authorized here. See
+[full contract and transaction limits](IDENTITY.md#fl-014-http-boundary-foundation).
