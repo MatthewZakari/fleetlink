@@ -16,8 +16,12 @@ provisional until caller commit. No login/registration HTTP flow, HTTP refresh/l
 access JWT, authentication middleware, provider/password architecture, authorization or
 MFA/recovery is implemented. This is not production Identity readiness.
 FL-014 adds an unmounted HTTP boundary with sanitized authentication errors and explicit
-commit-before-result composition, pending independent review. Demonstration routes exist
+commit-before-result composition, completed and validated. Demonstration routes exist
 only in tests; the shipped API still exposes only technical probes and OpenAPI.
+FL-015 adds internal initial session/evidence establishment for trusted authenticated callers,
+with explicit lifetime limits and atomic persistence, pending independent review. It adds no
+public authentication flow. Account eligibility is a snapshot; results require commit and
+cleanup before credential export.
 Phase 1 is not complete. See [Identity contracts](docs/IDENTITY.md) and
 [proposed refresh protocol ADR](docs/ADR/0004-refresh-token-protocol.md).
 

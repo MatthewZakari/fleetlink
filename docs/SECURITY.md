@@ -215,4 +215,25 @@ policy; do not retry acceptance automatically. See the
 
 Provider architecture, public auth challenges/transport, access tokens, password flows,
 authorization, rate limits and production hardening remain deferred. ADR-0004 remains Proposed;
-FL-014 awaits independent review and does not complete Phase 1.
+FL-014 is completed and validated; Phase 1 remains incomplete.
+
+## FL-015 initial session establishment
+
+Identity's internal `establish_initial_session` composes existing user/session/token ports,
+FL-012 generation and FL-014 transaction ownership. It requires a trusted authentication
+assertion, ACTIVE account snapshot and explicit bounded lifetime policy without production
+defaults. The assertion type is a caller convention, not cryptographic proof. One ACTIVE
+session and first CURRENT evidence commit atomically; raw credentials never persist.
+The initial refresh expiry remains absolute through FL-013 rotation. Results remain sensitive
+and provisional until the existing operation runner commits and completes cleanup.
+
+Account suspension after the eligibility read can race creation; no atomic account-status
+coordination is claimed. Commit acknowledgement uncertainty, cancellation during commit and
+post-commit cleanup/delivery failure can leave durable rows without a returned credential.
+Never log credentials, verifiers, serialized snapshots, SQL parameters or object internals.
+Existing structural capture limits apply; configuration redaction does not register generated
+credentials. Repr masking cannot secure memory or prevent premature export by trusted code.
+No automatic retries, idempotent creation or recovery mechanism is introduced. No schema,
+settings, dependency, new transaction framework or public route changes are made. Rollback
+retains schema/evidence. FL-015 awaits independent review; ADR-0004 remains Proposed and
+Phase 1 remains incomplete. See [complete contracts and deferred policy](IDENTITY.md#fl-015-initial-session-establishment).

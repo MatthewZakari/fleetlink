@@ -171,3 +171,17 @@ References: [Identity contracts](../IDENTITY.md), [security](../SECURITY.md),
 [SHA-256](https://docs.python.org/3.12/library/hashlib.html),
 [safe comparison](https://docs.python.org/3.12/library/hmac.html#hmac.compare_digest),
 [RFC 4648 encoding](https://www.rfc-editor.org/rfc/rfc4648.html).
+
+## FL-015 initial lifetime composition
+
+FL-015 establishes initial evidence using this unchanged protocol and existing persistence.
+A trusted-caller assertion marks already-completed authentication; its Python type does not
+verify authentication or make the assertion unforgeable. ACTIVE account snapshot eligibility,
+explicit creation/expiry times and validated caller-supplied maximum lifetimes are required.
+No production TTLs are chosen. Initial refresh expiry cannot exceed session expiry and is
+preserved exactly by FL-013; no sliding lifetime is introduced. Creation and first evidence
+share one caller-owned transaction. Export requires successful FL-014 commit and cleanup.
+Account-suspension coordination and uncertain-commit reconciliation remain deferred.
+This extends application composition, not the wire format or cryptographic construction.
+Status remains **Proposed**, pending independent security review. See
+[FL-015 contracts](../IDENTITY.md#fl-015-initial-session-establishment).

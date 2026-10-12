@@ -217,5 +217,23 @@ production router, new container, generic Unit of Work or dependency is introduc
 Only test-mounted routes demonstrate the boundary, including real PostgreSQL commit-time
 failure and committed reuse denial. Existing public probes/OpenAPI remain unchanged.
 This extends the prescribed architecture without a significant deviation requiring an ADR.
-ADR-0004 remains Proposed, independent review is pending, and Phase 1 remains incomplete.
+ADR-0004 remains Proposed, FL-014 is completed and validated, and Phase 1 remains incomplete.
 See [composition, error contracts and post-commit limits](IDENTITY.md#fl-014-http-boundary-foundation).
+
+## FL-015 initial session establishment
+
+Identity's internal `establish_initial_session` composes existing user/session/token ports,
+FL-012 generation and FL-014 transaction ownership. It requires a trusted authentication
+assertion, ACTIVE account snapshot and explicit bounded lifetime policy without production
+defaults. The assertion type is a caller convention, not cryptographic proof. One ACTIVE
+session and first CURRENT evidence commit atomically; raw credentials never persist.
+The initial refresh expiry remains absolute through FL-013 rotation. Results remain sensitive
+and provisional until the existing operation runner commits and completes cleanup.
+
+Account suspension after the eligibility read can race creation; no atomic account-status
+coordination is claimed. Commit acknowledgement uncertainty, cancellation during commit and
+post-commit cleanup/delivery failure can leave durable rows without a returned credential.
+No automatic retries, idempotent creation or recovery mechanism is introduced. No schema,
+settings, dependency, new transaction framework or public route changes are made. Rollback
+retains schema/evidence. FL-015 awaits independent review; ADR-0004 remains Proposed and
+Phase 1 remains incomplete. See [complete contracts and deferred policy](IDENTITY.md#fl-015-initial-session-establishment).

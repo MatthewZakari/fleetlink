@@ -336,3 +336,33 @@ Run `make api-test`, `make api-test-secrets`, `make api-test-observability`, `ma
 `make api-typecheck`, isolated `make api-test-db`, `make infra-config`, `make secret-scan`
 and `git diff --check`. Broker integration and Flutter checks are required if those components
 change; FL-014 changes neither. Record executed results separately from these required gates.
+
+## FL-015 establishment validation
+
+Focused unit tests:
+`uv run --project apps/api --locked pytest apps/api/tests/test_session_establishment.py`.
+They cover assertion/policy validation, UTC/chronology/lifetime boundaries, ACTIVE eligibility,
+missing/mismatched/suspended/disabled users, generation failure, persistence call ordering,
+conflict propagation without retry and sensitive provisional representations.
+
+`tests_db/test_session_establishment_postgres.py` uses the unchanged fresh dedicated
+`fleetlink_test_fl005` setup/test/drop workflow. It invokes IdentityOperation directly, without
+new routes. Independent reads prove committed initial evidence and FL-013 absolute-expiry
+compatibility; failures after session/token insertion and deferred-FK commit rejection leave
+neither row. Duplicate session/family/token IDs preserve existing data. Event/barrier tests
+cover cancellation, competing creation and suspension before/after eligibility reads. The
+post-commit error seam simulates lost acknowledgement (not a real network fault) and proves
+no result/retry despite durable rows; cleanup failure after commit also preserves rows.
+Real SQL instrumentation/error tests check generated credential/verifier exclusion from
+controlled logs, spans, errors and representations. No memory-erasure guarantee is claimed.
+
+Run `make api-test`, `make api-test-secrets`, `make api-test-observability`, `make api-lint`,
+`make api-typecheck`, `make infra-config`, `make secret-scan` (pinned Gitleaks 8.30.1), and
+`git diff --check`. Validate modified Markdown links, scope/status consistency and unchanged
+migration head. Run `make infra-up`, `make api-db-test-setup`,
+`FLEETLINK_POSTGRES_DB=fleetlink_test_fl005 make api-test-db`, `make api-db-test-drop`, and
+`make infra-down`, with explicit private host overrides if needed. Never use `infra-reset`,
+run database suites concurrently or test against development data. Full database tests retain
+migration round-trip/drift coverage. Broker/Flutter checks are required only if those components
+change. Record actual commands/results and unavailable checks; passing tests does not establish
+independent security acceptance, atomic suspension coordination or production readiness.

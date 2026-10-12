@@ -450,7 +450,7 @@ See [ADR-0004](ADR/0004-refresh-token-protocol.md) (still Proposed) and
 
 ## FL-014 HTTP boundary foundation
 
-FL-014 adds `modules/identity/interface/http`, pending independent review. It is an
+FL-014 adds `modules/identity/interface/http`, completed and validated. It is an
 adapter foundation, not an authentication API. No router is mounted by `create_app`;
 `/health`, `/ready`, `/openapi.json` and their contracts remain unchanged. Domain,
 application, protocol and persistence semantics are unchanged. ADR-0004 stays Proposed.
@@ -544,3 +544,98 @@ Public login, registration, refresh, logout, token validation, JWT/JWKS, authent
 middleware, passwords/providers, OAuth/OIDC/PKCE, MFA, Flutter auth, authorization, rate
 limiting, outbox and production readiness remain deferred. Phase 1 remains incomplete.
 See [validation](TESTING.md#fl-014-http-boundary-validation).
+
+## FL-015 initial session establishment
+
+`application/session_establishment.py` exposes `establish_initial_session(assertion,
+session_id=..., family_id=..., created_at=..., session_expires_at=...,
+refresh_expires_at=..., lifetime_policy=..., users=..., sessions=..., tokens=...)`.
+It establishes an initial stable session and first CURRENT refresh record for an
+already-authenticated user. FL-015 awaits independent review; it is not a provider,
+public login flow, authorization implementation or production Identity release.
+
+### Trusted assertion and lifetime policy
+
+`TrustedAuthenticationAssertion(user_id, authenticated_at)` is an immutable trusted-caller
+convention, not cryptographic proof or an unforgeable capability. A bare UUID/dictionary
+is rejected, but trusted Python code can construct the wrapper. Future reviewed composition
+must authenticate first; never deserialize client IDs/flags into this type. Its timestamp
+asserts when authentication happened; it proves neither freshness nor assurance. No
+provider, assertion-verification mechanism or authentication adapter is implemented.
+
+`SessionLifetimePolicy(max_session_lifetime, max_refresh_lifetime)` requires positive
+`timedelta` values. Identity owns validation; trusted composition supplies centrally selected
+limits, never client-controlled values. There are no production defaults, settings or TTLs.
+All timestamps must be aware and normalize to UTC. The caller supplies the operation time;
+no clock or skew tolerance is introduced. Required relationships are:
+
+```text
+user.created_at <= authenticated_at <= created_at
+created_at < refresh_expires_at <= session_expires_at
+session_expires_at - created_at <= max_session_lifetime
+refresh_expires_at - created_at <= max_refresh_lifetime
+```
+
+Exact maximum lifetimes are permitted. Initial session/token creation timestamps are equal.
+The initial refresh expiry is the absolute lineage deadline: FL-013 preserves it exactly
+through rotation, even when the session expires later. There is no sliding expiry or
+commit/delivery-time freshness guarantee. Production limits and authentication freshness
+remain decisions for Identity/security owners before activation.
+
+### Transaction and sensitive result
+
+Validate arguments before I/O, load a matching ACTIVE user, then validate account chronology.
+Missing, mismatched, SUSPENDED and DISABLED users raise fixed `SessionAccountUnavailable`
+without generating credentials. Roles are not interpreted, changed or copied. The validated
+ACTIVE/version-zero session snapshot is constructed before I/O. Generate once through FL-012
+after eligibility checks, and construct CURRENT/version-zero
+evidence with the generated candidate UUID and verifier. Insert session then token using
+existing ports bound to the same transaction. Only one-way evidence enters persistence.
+
+`ProvisionalSessionEstablishment` contains session/family IDs, creation and expiry timestamps,
+and a hidden existing `ProvisionalRefresh`. Its `reveal()` delegates explicit sensitive
+export. It is not a transport DTO; never serialize it, log it or capture its internals.
+Ordinary representations omit the credential/verifier; Python memory is not secured or erased.
+
+Use the unchanged FL-014 `IdentityOperation.execute()` callback to supply its three ports.
+The service/repositories never begin, commit, roll back or close. Every exception must escape
+the transaction and sanitized Database boundary. Export only after `execute()` has committed
+once and completed cleanup. The callback is trusted: wrappers cannot prevent premature export.
+There is no new route, denial mapping, forwarding method, container or Unit of Work.
+
+Generation failure writes nothing. Failed session/token insertion, later callback failure,
+definite commit rejection or pre-commit cancellation must roll back both new records.
+Existing shielded rollback/close and fixed database-error sanitization remain authoritative.
+Cancellation during commit or lost acknowledgement may leave durability uncertain: release
+no credential and never retry automatically. Post-commit cleanup or delivery failure cannot
+undo committed rows. Verifiers cannot reconstruct a lost credential. No idempotent replay,
+reconciliation, delivery guarantee or secure credential recovery is implemented.
+
+### Concurrency and database guarantees
+
+Unique session/family/token IDs, user/session FKs, row-local checks and one CURRENT token per
+session are database-enforced. Duplicate identifiers fail, never upsert, reuse an existing
+session or regenerate/retry credentials. Two competing identical identifiers permit at most
+one committed creation; distinct sessions for the same user may both succeed. There is no
+session quota or single-use assertion policy. Temporal containment, maximum lifetimes and
+account eligibility are application rules, not cross-row database constraints. Other internal
+insertion primitives can still create tokenless sessions; atomicity is this service's contract.
+
+Eligibility is an account snapshot. Suspension committed before the read is rejected;
+suspension after an ACTIVE read can commit before establishment does, leaving a new session
+for a suspended user. The user FK does not coordinate status. Do not use a no-op user save
+or repeated read to claim atomic suspension policy. Account-status coordination across
+establishment, refresh and status changes requires separate review. FL-013 continues to check
+account status on refresh. Stable identifiers aid investigation, not automatic retry safety.
+
+### Compatibility and exclusions
+
+No domain/repository/HTTP changes, dependencies, settings, migrations or new infrastructure
+are introduced. Alembic stays `0004_refresh_token_rotation`. Rollback removes FL-015 code
+while retaining schema and committed evidence. ADR-0004 remains Proposed, Phase 1 incomplete.
+No public registration/login/refresh/logout/session management, passwords, OAuth/OIDC/PKCE,
+MFA/recovery, access tokens/JWT/JWKS, middleware, authorization, Flutter authentication UI,
+Redis/RabbitMQ authentication work, audit/outbox or production activation is implemented.
+Retention, quotas, assertion freshness/assurance, production lifetime limits, account-status
+coordination, uncertainty reconciliation and independent security review remain deferred.
+See [validation](TESTING.md#fl-015-establishment-validation).
