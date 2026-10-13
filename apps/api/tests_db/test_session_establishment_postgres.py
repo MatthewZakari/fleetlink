@@ -115,11 +115,6 @@ async def state(database: Database) -> tuple[list[AuthenticationSession], list[R
         return sessions, tokens
 
 
-async def suspend(database: Database) -> None:
-    async with database.session() as session, session.begin():
-        await SqlAlchemyUserRepository(session).save(USER.with_status(AccountStatus.SUSPENDED))
-
-
 def test_committed_initial_evidence_and_fl013_compatibility(
     settings: Settings, migrated_database: None
 ) -> None:
@@ -313,9 +308,9 @@ def test_concurrent_establishment(
             reads = 0
 
             class ConcurrentUsers(SqlAlchemyUserRepository):
-                async def get(self, user_id: UUID) -> User | None:
+                async def get_for_authentication(self, user_id: UUID) -> User | None:
                     nonlocal reads
-                    user = await super().get(user_id)
+                    user = await super().get_for_authentication(user_id)
                     reads += 1
                     await barrier.wait()
                     return user
@@ -355,38 +350,17 @@ def test_concurrent_establishment(
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("when", ["before", "after"])
-def test_suspension_snapshot_boundary(
-    settings: Settings, migrated_database: None, when: str
+@pytest.mark.parametrize("status", [AccountStatus.SUSPENDED, AccountStatus.DISABLED])
+def test_committed_ineligible_account_is_rejected(
+    settings: Settings, migrated_database: None, status: AccountStatus
 ) -> None:
     async def run() -> None:
         async with database_for_test(settings) as database:
-            if when == "before":
-                await suspend(database)
-
-            class SuspendingUsers(SqlAlchemyUserRepository):
-                async def get(self, user_id: UUID) -> User | None:
-                    snapshot = await super().get(user_id)
-                    # Independent transaction commits suspension after this read, before insertion.
-                    if when == "after":
-                        await suspend(database)
-                    return snapshot
-
-            async def work(ports: IdentityServices) -> service.ProvisionalSessionEstablishment:
-                assert isinstance(ports.users, SqlAlchemyUserRepository)
-                return await establish(replace(ports, users=SuspendingUsers(ports.users._session)))
-
-            if when == "before":
-                with pytest.raises(service.SessionAccountUnavailable):
-                    await IdentityOperation(database).execute(work)
-                assert await state(database) == ([], [])
-            else:
-                await IdentityOperation(database).execute(work)
-                sessions, tokens = await state(database)
-                assert len(sessions) == len(tokens) == 1
             async with database.session() as session, session.begin():
-                user = await SqlAlchemyUserRepository(session).get(USER.id)
-                assert user is not None and user.status is AccountStatus.SUSPENDED
+                await SqlAlchemyUserRepository(session).save(USER.with_status(status))
+            with pytest.raises(service.SessionAccountUnavailable):
+                await IdentityOperation(database).execute(establish)
+            assert await state(database) == ([], [])
 
     asyncio.run(run())
 

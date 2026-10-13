@@ -181,7 +181,10 @@ explicit creation/expiry times and validated caller-supplied maximum lifetimes a
 No production TTLs are chosen. Initial refresh expiry cannot exceed session expiry and is
 preserved exactly by FL-013; no sliding lifetime is introduced. Creation and first evidence
 share one caller-owned transaction. Export requires successful FL-014 commit and cleanup.
-Account-suspension coordination and uncertain-commit reconciliation remain deferred.
+FL-016 now coordinates account eligibility against status writes; see
+[Proposed ADR-0005](0005-identity-account-eligibility-coordination.md). This does not change
+the protocol, prove assertion provenance or guarantee eligibility at response delivery.
+Uncertain-commit reconciliation remains deferred.
 This extends application composition, not the wire format or cryptographic construction.
 Status remains **Proposed**, pending independent security review. See
 [FL-015 contracts](../IDENTITY.md#fl-015-initial-session-establishment).

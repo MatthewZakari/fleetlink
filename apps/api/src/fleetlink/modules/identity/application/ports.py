@@ -23,6 +23,17 @@ class UserRepository(Protocol):
         """Return a detached consistent snapshot, or None if missing."""
         ...
 
+    async def get_for_authentication(self, user_id: UUID) -> User | None:
+        """Read current eligibility under transaction-scoped account coordination.
+
+        Requires the caller's transaction. Block status writers until it completes;
+        return a detached snapshot (or None), without changing roles or version.
+        Acquire before session/token mutations; do not upgrade this read into a user
+        write or release it via a savepoint. UUID lookup is not authentication proof.
+        PostgreSQL composition uses READ COMMITTED; never retry failures implicitly.
+        """
+        ...
+
     async def save(self, user: User) -> User:
         """Replace status/roles if version matches; return the incremented snapshot.
 
