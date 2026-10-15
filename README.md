@@ -20,8 +20,11 @@ commit-before-result composition, completed and validated. Demonstration routes 
 only in tests; the shipped API still exposes only technical probes and OpenAPI.
 FL-015 adds internal initial session/evidence establishment for trusted authenticated callers,
 with explicit lifetime limits and atomic persistence, pending independent review. It adds no
-public authentication flow. Account eligibility is a snapshot; results require commit and
-cleanup before credential export.
+public authentication flow. Results require commit and cleanup before credential export.
+FL-016 adds transactional account eligibility for establishment and CURRENT refresh, pending
+independent Phase C review. Shared user-row coordination orders acceptance against status
+writes; it does not verify assertions, revoke all sessions or guarantee eligibility at delivery.
+See [Proposed ADR-0005](docs/ADR/0005-identity-account-eligibility-coordination.md).
 Phase 1 is not complete. See [Identity contracts](docs/IDENTITY.md) and
 [proposed refresh protocol ADR](docs/ADR/0004-refresh-token-protocol.md).
 

@@ -95,12 +95,14 @@ async def authenticate_refresh(
         raise SessionConflict("Session ownership is inconsistent")
     if token.status is RefreshTokenStatus.CONSUMED:
         # Expiry/account state cannot erase confirmed consumed-credential evidence.
+        # Account-independent response: take only session CAS, never an account lock
+        # after it. CURRENT acceptance below orders account -> session -> token.
         # Already-revoked families need no further write or version increment.
         if session.status is SessionStatus.ACTIVE:
             await sessions.save(session.revoke())
         return ProvisionalRefreshReuse()
     require_rotation_session(token, session, at=at)
-    user = await users.get(session.user_id)
+    user = await users.get_for_authentication(session.user_id)
     if user is None or user.id != session.user_id or user.status is not AccountStatus.ACTIVE:
         raise RefreshAccountUnavailable("Account is unavailable for refresh")
     issued = generate_refresh_credential()

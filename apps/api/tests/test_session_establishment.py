@@ -13,7 +13,9 @@ from fleetlink.modules.identity.application import session_establishment as serv
 from fleetlink.modules.identity.application.ports import UserRepository
 from fleetlink.modules.identity.application.refresh_ports import RefreshTokenRepository
 from fleetlink.modules.identity.application.refresh_protocol import (
+    IssuedRefreshCredential,
     RefreshCredentialGenerationError,
+    generate_refresh_credential,
     verify_refresh_credential,
 )
 from fleetlink.modules.identity.application.session_ports import (
@@ -35,7 +37,7 @@ class Harness:
         self.users = Mock(spec=UserRepository)
         self.sessions = Mock(spec=AuthenticationSessionRepository)
         self.tokens = Mock(spec=RefreshTokenRepository)
-        self.users.get.return_value = USER
+        self.users.get_for_authentication.return_value = USER
         self.arguments: dict[str, Any] = {
             "assertion": ASSERTION,
             "session_id": UUID(int=1501),
@@ -73,7 +75,7 @@ def harness() -> Harness:
 def test_initial_snapshots_protocol_and_order(
     harness: Harness, roles: frozenset[PlatformRole]
 ) -> None:
-    harness.users.get.return_value = replace(USER, roles=roles)
+    harness.users.get_for_authentication.return_value = replace(USER, roles=roles)
     order: list[str] = []
     harness.sessions.add.side_effect = lambda _: order.append("session")
     harness.tokens.add.side_effect = lambda _: order.append("token")
@@ -93,7 +95,8 @@ def test_initial_snapshots_protocol_and_order(
     # Unit-only export inspects the contract; fake repositories cannot establish durability.
     assert verify_refresh_credential(result.reveal(), token)
     assert not hasattr(token, "credential")
-    harness.users.get.assert_awaited_once_with(USER.id)
+    harness.users.get_for_authentication.assert_awaited_once_with(USER.id)
+    harness.users.get.assert_not_called()
     harness.users.save.assert_not_called()
     harness.sessions.save.assert_not_called()
     harness.tokens.rotate.assert_not_called()
@@ -113,7 +116,7 @@ def test_initial_snapshots_protocol_and_order(
 def test_account_rejection_precedes_generation(
     harness: Harness, monkeypatch: pytest.MonkeyPatch, user: User | None
 ) -> None:
-    harness.users.get.return_value = user
+    harness.users.get_for_authentication.return_value = user
     generator = Mock()
     monkeypatch.setattr(service, "generate_refresh_credential", generator)
     with pytest.raises(service.SessionAccountUnavailable, match="^Account is unavailable"):
@@ -154,7 +157,7 @@ def test_invalid_inputs_before_io(
     with pytest.raises(ValueError) as caught:
         harness.run(**{field: value})
     assert "private-invalid" not in str(caught.value)
-    harness.users.get.assert_not_called()
+    harness.users.get_for_authentication.assert_not_called()
     generator.assert_not_called()
     harness.no_writes()
 
@@ -217,10 +220,32 @@ def test_generation_failure_no_writes(harness: Harness, monkeypatch: pytest.Monk
     harness.no_writes()
 
 
+def test_coordination_precedes_generation_and_writes(
+    harness: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    order: list[str] = []
+    generate = generate_refresh_credential
+
+    async def read(user_id: UUID) -> User:
+        order.append("account")
+        return USER
+
+    def issue() -> IssuedRefreshCredential:
+        order.append("generate")
+        return generate()
+
+    harness.users.get_for_authentication.side_effect = read
+    harness.sessions.add.side_effect = lambda _: order.append("session")
+    harness.tokens.add.side_effect = lambda _: order.append("token")
+    monkeypatch.setattr(service, "generate_refresh_credential", issue)
+    harness.run()
+    assert order == ["account", "generate", "session", "token"]
+
+
 @pytest.mark.parametrize("stage", ["user", "session", "token"])
 def test_failure_propagates_without_retry(harness: Harness, stage: str) -> None:
     method = {
-        "user": harness.users.get,
+        "user": harness.users.get_for_authentication,
         "session": harness.sessions.add,
         "token": harness.tokens.add,
     }[stage]

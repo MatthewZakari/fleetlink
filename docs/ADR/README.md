@@ -33,3 +33,6 @@ Reference the ADR from affected docs and pull requests. A proposed ADR does not 
 
 - [ADR-0004 — Refresh token protocol and possession verification](0004-refresh-token-protocol.md)
   (Proposed for FL-012/FL-013 independent security review).
+
+- [ADR-0005 — Identity account eligibility coordination](0005-identity-account-eligibility-coordination.md)
+  (Proposed for FL-016 independent Phase C review).

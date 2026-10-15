@@ -8,6 +8,8 @@ The sections below record successive milestone boundaries. FL-012 supplies the
 refresh protocol previously deferred by FL-009/010/011. FL-013 composes the internal
 refresh operation below; login/registration and all HTTP authentication flows remain deferred.
 FL-014 adds the unmounted [HTTP boundary foundation](#fl-014-http-boundary-foundation).
+FL-016 adds [transactional account eligibility](#fl-016-transactional-account-eligibility),
+superseding FL-013/015 snapshot-only checks, pending independent Phase C review.
 See [the protocol contract](#fl-012-refresh-token-protocol-foundation).
 
 ## Ownership and model
@@ -389,8 +391,8 @@ The owning session must match, be active and unexpired, with compatible token li
 and `prepare_rotation` use one authoritative rule. The owning user must exist, match the
 session owner and be ACTIVE. SUSPENDED and DISABLED are rejected. This is account lifecycle
 eligibility, not authorization; roles are neither interpreted nor copied into credentials.
-Account status is checked from the repository snapshot; this milestone adds no account-wide
-locking or atomic account-status-change/revocation policy.
+At FL-013, account status was checked from a repository snapshot. FL-016 below now coordinates
+CURRENT acceptance against status writes; no account-wide revocation policy is added.
 
 ### Absolute, non-sliding expiry
 
@@ -621,12 +623,11 @@ session quota or single-use assertion policy. Temporal containment, maximum life
 account eligibility are application rules, not cross-row database constraints. Other internal
 insertion primitives can still create tokenless sessions; atomicity is this service's contract.
 
-Eligibility is an account snapshot. Suspension committed before the read is rejected;
-suspension after an ACTIVE read can commit before establishment does, leaving a new session
-for a suspended user. The user FK does not coordinate status. Do not use a no-op user save
-or repeated read to claim atomic suspension policy. Account-status coordination across
-establishment, refresh and status changes requires separate review. FL-013 continues to check
-account status on refresh. Stable identifiers aid investigation, not automatic retry safety.
+At the FL-015 baseline, eligibility was an account snapshot. Suspension after an ACTIVE read
+could commit before establishment, leaving a new session for a suspended user. The user FK
+does not coordinate status. FL-016 below supersedes that snapshot-only behavior in both
+establishment and CURRENT refresh, without a no-op user save or repeated-read workaround.
+Stable identifiers aid investigation, not automatic retry safety.
 
 ### Compatibility and exclusions
 
@@ -636,6 +637,62 @@ while retaining schema and committed evidence. ADR-0004 remains Proposed, Phase 
 No public registration/login/refresh/logout/session management, passwords, OAuth/OIDC/PKCE,
 MFA/recovery, access tokens/JWT/JWKS, middleware, authorization, Flutter authentication UI,
 Redis/RabbitMQ authentication work, audit/outbox or production activation is implemented.
-Retention, quotas, assertion freshness/assurance, production lifetime limits, account-status
-coordination, uncertainty reconciliation and independent security review remain deferred.
+Retention, quotas, assertion freshness/assurance, production lifetime limits,
+uncertainty reconciliation and independent security review remain deferred. FL-016 adds
+account-status coordination below.
 See [validation](TESTING.md#fl-015-establishment-validation).
+
+## FL-016 transactional account eligibility
+
+FL-016 awaits independent Phase C review. `UserRepository.get_for_authentication(UUID)`
+returns a detached current user or None under transaction-scoped account coordination;
+it does not authenticate a UUID. `SqlAlchemyUserRepository` first selects the user ID
+`FOR SHARE`, then runs the existing joined `get()` in a separate statement. It never
+locks the nullable side of the role join. Ordinary `get()` remains nonlocking, and reads
+change neither roles nor user versions. Existing `save()` updates the user before roles,
+so status and role writers conflict with the parent lock.
+
+The supported isolation is PostgreSQL READ COMMITTED. The second statement sees a fresh
+snapshot after a waiting writer commits; `populate_existing` refreshes cached ORM values.
+Missing users have no row/gap lock. Alternate stronger isolation can raise serialization
+failures rather than return a fresh snapshot; failures must escape without automatic retry.
+No isolation setting or production default is changed.
+
+`establish_initial_session` and CURRENT `authenticate_refresh` acquire coordination before
+generation and session/token mutations. Lock order is user -> session -> token. Nonlocking
+lineage reads and refresh possession verification precede the user lock; existing session
+and token CAS still reject competing stale lineage writes. Shared account readers are
+compatible, including distinct session creation for the same user. Status/role writers wait;
+other accounts progress independently. Do not call external providers, perform expensive
+verification, upgrade a shared read into a user write, release locks via savepoints or acquire
+user coordination after lineage writes inside these callbacks.
+
+Confirmed CONSUMED possession remains account-independent: session-only CAS revokes its
+family without a user lock, even for suspended/disabled users. It never later acquires an
+account lock. Wrong possession cannot reach account coordination or revoke anything.
+
+If suspension/disabling commits first, waiting establishment/CURRENT refresh sees ineligibility
+and produces no new evidence. If authentication holds coordination first, status changes wait
+until its transaction ends. The unchanged FL-014 runner commits once and cleans up before
+returning; rollback/pre-commit cancellation releases locks and partial writes. Driver waits
+remain bounded by existing command timeout; tests use additional local lock timeouts only.
+
+This guarantees ordering, not ACTIVE status at response delivery. Suspension after an
+authentication commit can precede response delivery. It does not revoke existing sessions;
+reactivation can restore eligibility for an otherwise valid lineage. Caller-supplied operation
+time/expiry semantics remain unchanged, with no new commit-time freshness check. Assertions
+remain trusted-caller conventions. Absolute refresh expiry, diagnostic privacy and provisional
+credential export remain unchanged. Lost commit acknowledgement and post-commit cleanup or
+delivery failures still cannot be reconciled or retried automatically; evidence cannot recover
+lost raw credentials.
+
+No schema/migration, dependency, settings, route, provider, JWT, authorization or FL-014 runner
+change is introduced. Internal adapters/test doubles implement the additive method; no fallback
+to ordinary get is permitted. Old instances still permit the snapshot race, so drain old workers
+and in-flight operations before relying on the new guarantee. Code rollback retains all evidence
+but restores that race; no database downgrade is needed. Phase 1 remains incomplete, ADR-0004
+stays Proposed and production authentication readiness is not established.
+
+See [Proposed ADR-0005](ADR/0005-identity-account-eligibility-coordination.md),
+[database contract](DATABASE.md#fl-016-account-row-coordination) and
+[validation](TESTING.md#fl-016-account-eligibility-validation).

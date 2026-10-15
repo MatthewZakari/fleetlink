@@ -214,3 +214,34 @@ drops only refresh records and their table/index. Users, roles, sessions, PostGI
 objects survive. `make api-db-upgrade` recreates an empty refresh table. Lost evidence is not
 restored. Prefer code rollback retaining the additive schema; review backups/forward fixes
 before destructive rollback outside the dedicated test database.
+
+## FL-016 account-row coordination
+
+`SqlAlchemyUserRepository.get_for_authentication` selects the user ID `FOR SHARE` before
+issuing the ordinary joined snapshot query. It requires an existing caller transaction,
+locks only the parent row, and changes no user version or roles. The lock conflicts with
+status/role UPDATE and DELETE, including NO KEY UPDATE, while shared authentication reads
+and FK KEY SHARE remain compatible. Ordinary `get()` still reads without row locks.
+
+READ COMMITTED is the supported existing default: the second statement sees fresh status
+and roles after any writer wait, and `populate_existing` replaces stale ORM state. Role
+writers must use the existing parent-first repository contract. Missing users get no gap
+lock; no successful authentication relies on absence. Stronger isolation can fail with a
+serialization error; changing isolation requires review, with no implicit retry permitted.
+
+Lock order for establishment/CURRENT refresh is user -> session -> token. Confirmed consumed
+reuse and standalone revocation use session-only CAS and never subsequently lock the user.
+Do not compose shared-read-to-user-write upgrades, reverse ordering, arbitrary multi-user
+locking or savepoint releases into authentication callbacks. Avoid remote calls and expensive
+verification under locks. Status/role writes on the same account may wait; other users and
+shared readers proceed independently. Existing command timeout bounds driver calls; no new
+production defaults are added. Integration tests use test-local lock_timeout and observe
+pg_blocking_pids rather than infer blocking from sleeps.
+
+Rollback and pre-commit cancellation release coordination and partial writes. Commit ambiguity
+and post-commit response/cleanup failures retain FL-014/015 limitations. Suspension after an
+authentication commit can precede delivery; no session revocation or reactivation policy changes.
+Mixed old/new authentication workers cannot claim the guarantee. Drain old workers and in-flight
+transactions first; code rollback retains data but restores the race. No schema, migration or
+DDL changes; Alembic remains `0004_refresh_token_rotation`. See
+[Proposed ADR-0005](ADR/0005-identity-account-eligibility-coordination.md).

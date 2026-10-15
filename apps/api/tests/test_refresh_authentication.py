@@ -22,9 +22,11 @@ from fleetlink.modules.identity.application.refresh_ports import (
 )
 from fleetlink.modules.identity.application.refresh_protocol import (
     InvalidRefreshCredential,
+    IssuedRefreshCredential,
     RefreshCredential,
     RefreshCredentialGenerationError,
     derive_refresh_verifier,
+    generate_refresh_credential,
     parse_refresh_credential,
     verify_refresh_credential,
 )
@@ -69,7 +71,7 @@ class Harness:
         )
         self.tokens.get.return_value = self.token
         self.sessions.get.return_value = SESSION
-        self.users.get.return_value = USER
+        self.users.get_for_authentication.return_value = USER
 
     def run(
         self, presented: object = None, *, at: datetime = AT
@@ -108,7 +110,8 @@ def test_current_active_rotates_with_protocol_evidence_and_absolute_expiry(
     assert isinstance(result, service.ProvisionalRefresh)
     harness.tokens.get.assert_awaited_once_with(harness.credential.candidate_id)
     harness.sessions.get.assert_awaited_once_with(SESSION.id)
-    harness.users.get.assert_awaited_once_with(USER.id)
+    harness.users.get_for_authentication.assert_awaited_once_with(USER.id)
+    harness.users.get.assert_not_called()
     harness.tokens.rotate.assert_awaited_once()
     old, replacement, session = harness.tokens.rotate.call_args.args
     assert old == harness.token and session == SESSION
@@ -151,6 +154,48 @@ def test_unknown_candidate(harness: Harness) -> None:
     with pytest.raises(RefreshTokenNotFound, match="^Refresh token does not exist$"):
         harness.run()
     harness.sessions.get.assert_not_called()
+    harness.assert_no_mutation()
+
+
+def test_possession_before_coordination_before_generation_and_rotation(
+    harness: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    order: list[str] = []
+    verify = verify_refresh_credential
+    generate = generate_refresh_credential
+
+    def possession(presented: object, record: RefreshTokenRecord) -> bool:
+        order.append("possession")
+        return verify(presented, record)
+
+    async def read(user_id: UUID) -> User:
+        order.append("account")
+        return USER
+
+    def issue() -> IssuedRefreshCredential:
+        order.append("generate")
+        return generate()
+
+    harness.users.get_for_authentication.side_effect = read
+    harness.tokens.rotate.side_effect = lambda *args, **kwargs: order.append("rotation")
+    monkeypatch.setattr(service, "verify_refresh_credential", possession)
+    monkeypatch.setattr(service, "generate_refresh_credential", issue)
+    harness.run()
+    assert order == ["possession", "account", "generate", "rotation"]
+
+
+def test_coordination_failure_propagates_without_generation_or_retry(
+    harness: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    generate = Mock(side_effect=AssertionError("Unexpected generation"))
+    monkeypatch.setattr(service, "generate_refresh_credential", generate)
+    harness.users.get_for_authentication.side_effect = RuntimeError(
+        "Synthetic coordination failure"
+    )
+    with pytest.raises(RuntimeError, match="Synthetic coordination failure"):
+        harness.run()
+    harness.users.get_for_authentication.assert_awaited_once()
+    generate.assert_not_called()
     harness.assert_no_mutation()
 
 
@@ -247,7 +292,7 @@ def test_session_unavailable_or_inconsistent_before_generation(
 def test_account_must_be_present_owned_and_active(
     harness: Harness, monkeypatch: pytest.MonkeyPatch, user: User | None
 ) -> None:
-    harness.users.get.return_value = user
+    harness.users.get_for_authentication.return_value = user
     generate = Mock(side_effect=AssertionError("Unexpected generation"))
     monkeypatch.setattr(service, "generate_refresh_credential", generate)
     with pytest.raises(

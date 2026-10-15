@@ -53,3 +53,11 @@ problems and native request composition. An explicit operation runner commits be
 results and rolls back failures; repositories and domain objects retain their existing
 contracts. Only tests mount demonstration routes. No public Identity workflow is implemented.
 See [usage and limitations](../../../../../docs/IDENTITY.md#fl-014-http-boundary-foundation).
+
+FL-016 adds `UserRepository.get_for_authentication` and uses it for initial establishment
+and CURRENT refresh. The adapter selects the parent FOR SHARE before a fresh READ COMMITTED
+snapshot query, with account -> session -> token lock ordering and no user-version mutation.
+Consumed reuse remains session-only and account-independent. Status writes wait until the
+acceptance transaction ends; this is not permanent eligibility or account-wide revocation.
+No routes, providers, schema, dependencies or FL-014 runner changes are added. Independent
+Phase C review is pending; ADR-0004/0005 remain Proposed and Phase 1 remains incomplete.

@@ -227,9 +227,10 @@ session and first CURRENT evidence commit atomically; raw credentials never pers
 The initial refresh expiry remains absolute through FL-013 rotation. Results remain sensitive
 and provisional until the existing operation runner commits and completes cleanup.
 
-Account suspension after the eligibility read can race creation; no atomic account-status
-coordination is claimed. Commit acknowledgement uncertainty, cancellation during commit and
-post-commit cleanup/delivery failure can leave durable rows without a returned credential.
+FL-015 originally allowed suspension after the eligibility read to race creation;
+FL-016 below adds transactional account-status coordination. Commit acknowledgement uncertainty,
+cancellation during commit and post-commit cleanup/delivery failure can leave durable rows
+without a returned credential.
 Never log credentials, verifiers, serialized snapshots, SQL parameters or object internals.
 Existing structural capture limits apply; configuration redaction does not register generated
 credentials. Repr masking cannot secure memory or prevent premature export by trusted code.
@@ -237,3 +238,25 @@ No automatic retries, idempotent creation or recovery mechanism is introduced. N
 settings, dependency, new transaction framework or public route changes are made. Rollback
 retains schema/evidence. FL-015 awaits independent review; ADR-0004 remains Proposed and
 Phase 1 remains incomplete. See [complete contracts and deferred policy](IDENTITY.md#fl-015-initial-session-establishment).
+
+## FL-016 transactional eligibility boundary
+
+FL-016 adds a transaction-scoped coordinated user read to establishment and CURRENT refresh,
+pending independent Phase C review. The SQLAlchemy adapter locks only the user row FOR SHARE
+then reads a fresh detached snapshot at READ COMMITTED. It preserves ordinary nonlocking reads,
+user versions/roles, session/token CAS and absolute expiry. Account -> session -> token ordering
+keeps status updates outside the acceptance transaction; shared readers remain compatible.
+Confirmed consumed-token reuse stays account-independent, with session-only CAS and no later
+account lock. Authentication provenance is still a trusted-caller convention.
+
+No external verification/provider work belongs inside the lock interval. Status/role writers
+may contend, and command timeouts/failures must escape without retry. Suspension after commit
+can precede response delivery; suspension does not revoke sessions and reactivation can restore
+eligibility. Commit uncertainty, provisional disclosure and lost-response limitations remain.
+No credential, verifier, snapshot or SQL parameter capture is permitted. No public routes,
+providers, JWTs, new configuration, schema, dependencies or transaction-runner changes are added.
+Drain old authentication instances before relying on this guarantee; code rollback preserves
+rows but restores snapshot races. Phase 1 remains incomplete; ADR-0004 stays Proposed and no
+production authentication readiness is claimed. See
+[Identity contracts](IDENTITY.md#fl-016-transactional-account-eligibility) and
+[Proposed ADR-0005](ADR/0005-identity-account-eligibility-coordination.md).

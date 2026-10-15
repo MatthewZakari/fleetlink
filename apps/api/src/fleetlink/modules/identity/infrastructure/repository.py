@@ -50,6 +50,21 @@ class SqlAlchemyUserRepository:
             roles=frozenset(PlatformRole(role) for _, role in rows if role is not None),
         )
 
+    async def get_for_authentication(self, user_id: UUID) -> User | None:
+        # Lock only the parent, not the nullable side of get()'s outer join.
+        # FOR SHARE conflicts with status UPDATE (including NO KEY UPDATE), while
+        # concurrent authentication readers and FK KEY SHARE locks remain compatible.
+        # autobegin=False requires the caller's transaction. No savepoint/release here.
+        locked = await self._session.scalar(
+            select(UserRecord.id).where(UserRecord.id == user_id).with_for_update(read=True)
+        )
+        if locked is None:
+            return None
+        # At READ COMMITTED this new statement sees the status AND roles committed
+        # by a writer we waited for. populate_existing in get() refreshes ORM state.
+        # Repository role writers update the parent first and cannot pass our lock.
+        return await self.get(user_id)
+
     async def save(self, user: User) -> User:
         changed = await self._session.scalar(
             update(UserRecord)

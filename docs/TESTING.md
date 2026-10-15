@@ -350,7 +350,8 @@ conflict propagation without retry and sensitive provisional representations.
 new routes. Independent reads prove committed initial evidence and FL-013 absolute-expiry
 compatibility; failures after session/token insertion and deferred-FK commit rejection leave
 neither row. Duplicate session/family/token IDs preserve existing data. Event/barrier tests
-cover cancellation, competing creation and suspension before/after eligibility reads. The
+cover cancellation, competing creation and committed ineligible accounts. FL-016 replaces
+the former accepted snapshot-race case with the coordinated concurrency tests below. The
 post-commit error seam simulates lost acknowledgement (not a real network fault) and proves
 no result/retry despite durable rows; cleanup failure after commit also preserves rows.
 Real SQL instrumentation/error tests check generated credential/verifier exclusion from
@@ -366,3 +367,32 @@ run database suites concurrently or test against development data. Full database
 migration round-trip/drift coverage. Broker/Flutter checks are required only if those components
 change. Record actual commands/results and unavailable checks; passing tests does not establish
 independent security acceptance, atomic suspension coordination or production readiness.
+
+## FL-016 account eligibility validation
+
+Unit coverage in `tests/test_session_establishment.py` and `tests/test_refresh_authentication.py`
+uses the coordinated user port, checks account-before-generation/mutation ordering, possession
+before coordination, failure propagation without retry and unchanged consumed-reuse behavior.
+Existing inner-layer, lifetime, privacy and production-route absence tests remain required.
+
+`tests_db/test_account_eligibility_postgres.py` uses independent transactions and bounded
+`pg_blocking_pids()` observation to prove actual blocking in both transaction orders for
+establishment and CURRENT refresh, SUSPENDED and DISABLED states. It checks stale ORM/snapshot
+replacement, role consistency, no read version increments, missing users, explicit begin,
+different-user progress, commit/rollback/cancellation release, cancellation while waiting and
+test-local lock_timeout failure without partial evidence. Consumed reuse completes while an
+account writer holds its lock. Existing competing-establishment barriers demonstrate compatible
+shared readers; all FL-009 through FL-015 CAS, diagnostic, uncertain-commit and migration tests
+remain in the full suite. The supported isolation is explicitly asserted READ COMMITTED.
+
+Run `make api-test`, `make api-test-secrets`, `make api-test-observability`, `make api-lint`,
+`make api-typecheck`, `make infra-config`, `python3 infrastructure/docker/test_validate.py`,
+`make secret-scan` with Gitleaks 8.30.1, `git diff --check` and `git fsck --full`.
+Run the full fresh isolated workflow: `make infra-up`, `make api-db-test-setup`,
+`FLEETLINK_POSTGRES_DB=fleetlink_test_fl005 make api-test-db`, `make api-db-test-drop`,
+then `make infra-down`. Explicitly set the discovered private PostgreSQL host if needed.
+Never use fleetlink_dev, run suites concurrently, delete development volumes or use infra-reset.
+Verify unchanged migration head and public route exposure; check modified Markdown links.
+Record exact executed results and limitations separately; these are required checks, not
+claims of execution. Broker and Flutter checks are conditional on changes to those components.
+Passing tests does not establish provider verification, delivery atomicity or production readiness.

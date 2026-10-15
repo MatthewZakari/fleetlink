@@ -97,7 +97,7 @@ async def establish_initial_session(
     All failures must escape the transaction and sanitized Database session boundary.
     FL-014's unchanged IdentityOperation callback can supply these three ports. Do
     not export/retain the result before execute returns after commit and cleanup.
-    Eligibility is a snapshot, not coordination with concurrent account suspension.
+    Account coordination precedes session/token writes and lasts until transaction end.
     """
     if not isinstance(assertion, TrustedAuthenticationAssertion):
         raise ValueError("A trusted authentication assertion is required")
@@ -117,7 +117,7 @@ async def establish_initial_session(
         or refresh_expires_at - created_at > lifetime_policy.max_refresh_lifetime
     ):
         raise ValueError("Establishment chronology or lifetime is invalid")
-    user = await users.get(assertion.user_id)
+    user = await users.get_for_authentication(assertion.user_id)
     if user is None or user.id != assertion.user_id or user.status is not AccountStatus.ACTIVE:
         raise SessionAccountUnavailable("Account is unavailable for session establishment")
     if user.created_at > assertion.authenticated_at:
