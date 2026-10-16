@@ -260,3 +260,21 @@ rows but restores snapshot races. Phase 1 remains incomplete; ADR-0004 stays Pro
 production authentication readiness is claimed. See
 [Identity contracts](IDENTITY.md#fl-016-transactional-account-eligibility) and
 [Proposed ADR-0005](ADR/0005-identity-account-eligibility-coordination.md).
+
+## FL-017 possession-confirmed session termination
+
+The internal `revoke_session_by_refresh_credential` application operation composes existing
+protocol and repository contracts. Strict parsing and evidence lookup precede possession
+verification; only then is the evidence-owned session resolved and checked. CURRENT/CONSUMED
+and expired evidence can terminate that lineage, independently of account/session expiry.
+ACTIVE sessions use existing terminal revocation CAS; already REVOKED sessions need no write.
+No user repository, token mutation, credential generation or new infrastructure is introduced.
+
+The same empty provisional marker represents newly/already revoked state. The unchanged
+FL-014 caller commits and cleans up before completion can be treated as durable. Conflicts
+escape without retries; uncertain commit and post-commit cleanup remain limitations.
+Session-only writes never acquire a later account lock. Existing refresh/reuse and FL-016
+coordination are unchanged. No public route, schema, dependency, configuration or production
+activation is added. FL-017 awaits independent Phase C review; Phase 1 is incomplete and
+ADR-0004/0005/0006 remain Proposed. See [Identity](IDENTITY.md#fl-017-possession-confirmed-session-revocation)
+and [ADR-0006](ADR/0006-possession-confirmed-session-revocation.md).

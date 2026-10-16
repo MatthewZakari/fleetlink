@@ -245,3 +245,17 @@ Mixed old/new authentication workers cannot claim the guarantee. Drain old worke
 transactions first; code rollback retains data but restores the race. No schema, migration or
 DDL changes; Alembic remains `0004_refresh_token_rotation`. See
 [Proposed ADR-0005](ADR/0005-identity-account-eligibility-coordination.md).
+
+## FL-017 session revocation
+
+Possession-confirmed termination reuses evidence lookup and terminal session CAS in one
+caller-owned transaction. No user row is read/locked and no refresh evidence is written.
+Never acquire account coordination after the session mutation. Already revoked sessions
+need no save; stale CAS must escape for rollback without retry or successful completion.
+The unchanged FL-014 boundary commits and closes before returning. Uncertain commit/cleanup
+can still leave durable revocation despite an error. See [Identity](IDENTITY.md#fl-017-possession-confirmed-session-revocation).
+
+There is no schema/index/migration or isolation change; head remains
+`0004_refresh_token_rotation`. Code rollback preserves all records and committed revocations.
+Do not downgrade tables or reactivate sessions for rollback. Real-service validation uses only
+the guarded fresh test database and preserves development volumes.

@@ -260,3 +260,23 @@ rows but restores snapshot races. Phase 1 remains incomplete; ADR-0004 stays Pro
 production authentication readiness is claimed. See
 [Identity contracts](IDENTITY.md#fl-016-transactional-account-eligibility) and
 [Proposed ADR-0005](ADR/0005-identity-account-eligibility-coordination.md).
+
+## FL-017 termination authority
+
+Possession verified against retained refresh evidence authorizes only termination of its owning
+session/family. CURRENT/CONSUMED and expired evidence are permitted; a UUID alone or wrong secret
+cannot load/mutate the session through this operation. Account status and session expiry do not
+block termination. A stolen historical credential can cause targeted family termination, but
+cannot renew it or target another family. This tradeoff is recorded in
+[Proposed ADR-0006](ADR/0006-possession-confirmed-session-revocation.md).
+
+Terminal session CAS and proof-before-effect ordering remain mandatory. Already revoked state
+needs no write; stale CAS is a failure without retry. All results are provisional until the
+existing caller commits and cleans up; uncertain completion can leave durable revocation despite
+an error. No evidence/user/role mutation, account lock, public route or authentication principal
+is added. Existing diagnostic capture restrictions apply; no raw credentials, verifier material,
+snapshots or SQL parameters are logged or traced. The result is an empty non-sensitive marker.
+
+FL-017 awaits independent Phase C review. Public transport, abuse protection, authentication
+provenance, audit/retention and access-token revocation latency remain future decisions.
+ADR-0004/0005/0006 remain Proposed; Phase 1 and production readiness are not established.
