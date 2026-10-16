@@ -696,3 +696,52 @@ stays Proposed and production authentication readiness is not established.
 See [Proposed ADR-0005](ADR/0005-identity-account-eligibility-coordination.md),
 [database contract](DATABASE.md#fl-016-account-row-coordination) and
 [validation](TESTING.md#fl-016-account-eligibility-validation).
+
+## FL-017 possession-confirmed session revocation
+
+`application/session_revocation.py` adds
+`revoke_session_by_refresh_credential(presented, *, tokens, sessions)`, pending independent
+Phase C review. It parses through FL-012, loads evidence by candidate UUID and verifies
+possession before resolving the owning session from the persisted evidence's `session_id`.
+Missing evidence/session, failed proof and inconsistent returned session identity use existing
+fixed-message exceptions. Candidate UUID possession alone cannot trigger session access or
+mutation. No provider or authenticated-principal assertion is inferred.
+
+CURRENT and CONSUMED evidence, including expired evidence, authorize termination of only their
+own stable lineage after proof. Account eligibility and session expiry do not restrict this
+reduction of capability; the operation has no user port or clock input. ACTIVE sessions use
+existing `revoke()` and optimistic `save`. Already REVOKED state causes no additional save or
+version increment. Evidence, consumption metadata, users, roles and unrelated sessions remain
+unchanged. No replacement credential is generated and no token is rotated or deleted.
+
+`ProvisionalSessionRevocation` is an empty immutable marker, identical for newly/already revoked
+state. It has no identifiers, snapshots, credentials or sensitive export. Compose directly in
+the existing `IdentityOperation.execute()` callback with its session/token ports; all exceptions
+must escape. Treat completion as durable only after commit AND cleanup. No new runner, Unit of
+Work, savepoint, commit ownership or HTTP mapping is added.
+
+Session CAS serializes with refresh and confirmed reuse. Stale revocation can lose to refresh;
+the conflict is a failure, never successful termination or an automatic retry. A later deliberate
+operation can verify retained evidence and revoke a fresh session snapshot, invalidating the
+replacement for subsequent refresh. Sequential repetition after revocation is a no-op; concurrent
+attempts can conflict. Session-only revocation never subsequently acquires account coordination.
+Existing FL-013/016 semantics remain unchanged, including account-independent consumed reuse.
+
+Definite rollback/pre-commit cancellation leaves no revocation. Commit acknowledgement loss,
+cancellation during commit and post-commit cleanup/delivery failures can leave durable revocation
+despite an error. Return no success on failure and never infer rollback or retry automatically.
+This is not reliable delivery, reconciliation or immediate invalidation of future access tokens.
+
+A stolen historical credential can terminate its own family; that availability tradeoff grants
+no renewal or cross-family authority. No credentials, verifiers, snapshots, SQL parameters or
+object internals may enter diagnostics. No logs/spans/metrics or secret registry are added.
+Retention/erasure and audit policy remain deferred. The result's safe representation does not
+secure other sensitive objects in process memory or arbitrary debugger capture.
+
+No schema/index/migration, dependency, settings, route, public logout transport, provider,
+access JWT, middleware, authorization, MFA/recovery or account-wide revocation is added.
+Alembic remains `0004_refresh_token_rotation`. Code rollback removes this operation while
+preserving evidence and committed revocations; no database downgrade or reactivation is allowed.
+ADR-0004/0005/0006 remain Proposed, Phase 1 is incomplete and production readiness is not claimed.
+See [ADR-0006](ADR/0006-possession-confirmed-session-revocation.md),
+[validation](TESTING.md#fl-017-session-revocation-validation) and [database](DATABASE.md#fl-017-session-revocation).

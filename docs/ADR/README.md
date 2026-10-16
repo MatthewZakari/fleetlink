@@ -36,3 +36,6 @@ Reference the ADR from affected docs and pull requests. A proposed ADR does not 
 
 - [ADR-0005 — Identity account eligibility coordination](0005-identity-account-eligibility-coordination.md)
   (Proposed for FL-016 independent Phase C review).
+
+- [ADR-0006 — Possession-confirmed single-session revocation](0006-possession-confirmed-session-revocation.md)
+  (Proposed for FL-017 independent Phase C review).

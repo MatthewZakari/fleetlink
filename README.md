@@ -25,6 +25,11 @@ FL-016 adds transactional account eligibility for establishment and CURRENT refr
 independent Phase C review. Shared user-row coordination orders acceptance against status
 writes; it does not verify assertions, revoke all sessions or guarantee eligibility at delivery.
 See [Proposed ADR-0005](docs/ADR/0005-identity-account-eligibility-coordination.md).
+FL-017 adds internal possession-confirmed termination of one evidence-owned session, pending
+independent Phase C review. Historical/expired evidence can terminate only its own lineage;
+no account eligibility, rotation, public logout or account-wide control is added. Completion
+requires commit and cleanup; CAS conflicts remain failures without retry. See
+[Proposed ADR-0006](docs/ADR/0006-possession-confirmed-session-revocation.md).
 Phase 1 is not complete. See [Identity contracts](docs/IDENTITY.md) and
 [proposed refresh protocol ADR](docs/ADR/0004-refresh-token-protocol.md).
 

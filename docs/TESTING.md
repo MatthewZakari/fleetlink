@@ -396,3 +396,34 @@ Verify unchanged migration head and public route exposure; check modified Markdo
 Record exact executed results and limitations separately; these are required checks, not
 claims of execution. Broker and Flutter checks are conditional on changes to those components.
 Passing tests does not establish provider verification, delivery atomicity or production readiness.
+
+## FL-017 session revocation validation
+
+`tests/test_session_revocation.py` covers malformed/unsupported/noncanonical input, unknown
+candidates, wrong secrets, identifier substitution, mismatched evidence/session, proof-before-effect,
+CURRENT/CONSUMED and expired evidence, active/revoked/expired sessions, no-write repeats, fixed
+errors, conflict propagation without retry and non-sensitive empty results. No user port or
+credential generation/rotation exists in the operation.
+
+`tests_db/test_session_revocation_postgres.py` uses the guarded fresh `fleetlink_test_fl005`
+workflow. Independent reads verify committed scoped revocation, evidence preservation and
+unrelated account/session isolation. Barriers/events force both refresh/reuse versus termination
+commit orders and prove stale CAS failure without retry. Caller failure, deferred-FK commit
+rejection and cancellation roll back; injected post-commit acknowledgement/close failures return
+no result despite durable revocation. These injections simulate uncertainty, not real network
+faults. Termination completes before a held account-status UPDATE releases. Bounded waits and
+pool-return checks detect leaks; arbitrary sleeps do not establish ordering.
+Instrumented SQL success/failure checks exclude wire credentials, secret components, verifier
+representations and session snapshots from controlled logs, errors and spans.
+
+Run `make api-test`, `make api-test-secrets`, `make api-test-observability`, `make api-lint`,
+`make api-typecheck`, `make infra-config`, `python3 infrastructure/docker/test_validate.py`,
+`make secret-scan` with Gitleaks 8.30.1, `git diff --check` and `git fsck --full`.
+Run `make infra-up`, `make api-db-test-setup`,
+`FLEETLINK_POSTGRES_DB=fleetlink_test_fl005 make api-test-db`, `make api-db-test-drop`, then
+`make infra-down`; explicitly override the private PostgreSQL host when needed. Never reset
+development volumes, test against development or run database suites concurrently. Full database
+coverage retains migration round trips/drift and unchanged head `0004_refresh_token_rotation`.
+Check Markdown links, Proposed ADR statuses, scope consistency and absence of public Identity
+routes. Broker/Flutter checks are conditional on component changes. Record actual outcomes;
+these requirements are not claims of execution or production readiness.
