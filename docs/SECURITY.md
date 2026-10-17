@@ -280,3 +280,28 @@ snapshots or SQL parameters are logged or traced. The result is an empty non-sen
 FL-017 awaits independent Phase C review. Public transport, abuse protection, authentication
 provenance, audit/retention and access-token revocation latency remain future decisions.
 ADR-0004/0005/0006 remain Proposed; Phase 1 and production readiness are not established.
+
+## FL-018 assertion freshness boundary
+
+The internal `establish_fresh_initial_session` checks an explicit positive maximum assertion
+age before delegating once to FL-015. It admits only
+`0 <= created_at - authenticated_at < max_assertion_age`, using aware UTC instants and trusted
+caller-supplied `created_at`. Exact maximum age is stale; future assertions are invalid.
+Rejected admission reaches no repository or credential generator. No production age is chosen.
+
+Freshness is not provenance: forged authentication timestamps are not detected, and no
+assurance or single-use proof is created. Enforcement is opt-in; legacy establishment remains
+unchanged. Future public authentication requires separately reviewed, provenance-verified
+composition with trusted time/policy inputs. No hidden clock, post-lock recheck or freshness
+at commit/delivery is promised. Assertions may be reused within the window.
+
+Existing account coordination, possession verification, scoped revocation, CAS, absolute
+expiry and commit-before-export remain unchanged. Every failure propagates without retries;
+uncertain commit and post-commit cleanup can leave rows without a returned credential. No
+HTTP error mapping, capture surface or secret registry is added. Never log assertions,
+credentials, verifier material, snapshots or SQL parameters. Repr masking is not memory
+protection. There are no public routes, providers, JWTs, schema, settings or dependencies.
+FL-018 awaits independent Phase C review; [ADR-0007](ADR/0007-initial-authentication-freshness.md)
+and existing ADRs remain Proposed. Phase 1 is incomplete and production authentication is
+not enabled. Production ages, provenance, assurance and any stronger freshness/replay policy
+remain Identity/security decisions.

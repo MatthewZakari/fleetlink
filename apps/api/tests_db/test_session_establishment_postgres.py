@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from uuid import UUID
 
 import pytest
@@ -72,9 +73,21 @@ async def database_for_test(settings: Settings) -> AsyncIterator[Database]:
 
 
 async def establish(
-    services: IdentityServices, *, session_id: UUID = SESSION_ID, family_id: UUID = FAMILY_ID
+    services: IdentityServices,
+    *,
+    session_id: UUID = SESSION_ID,
+    family_id: UUID = FAMILY_ID,
+    fresh: bool = False,
 ) -> service.ProvisionalSessionEstablishment:
-    return await service.establish_initial_session(
+    operation = (
+        partial(
+            service.establish_fresh_initial_session,
+            freshness_policy=service.AuthenticationFreshnessPolicy(timedelta(minutes=5)),
+        )
+        if fresh
+        else service.establish_initial_session
+    )
+    return await operation(
         service.TrustedAuthenticationAssertion(USER.id, AT),
         session_id=session_id,
         family_id=family_id,
@@ -115,12 +128,13 @@ async def state(database: Database) -> tuple[list[AuthenticationSession], list[R
         return sessions, tokens
 
 
+@pytest.mark.parametrize("fresh", [False, True])
 def test_committed_initial_evidence_and_fl013_compatibility(
-    settings: Settings, migrated_database: None
+    settings: Settings, migrated_database: None, fresh: bool
 ) -> None:
     async def run() -> None:
         async with database_for_test(settings) as database:
-            result = await IdentityOperation(database).execute(establish)
+            result = await IdentityOperation(database).execute(partial(establish, fresh=fresh))
             sessions, tokens = await state(database)
             assert len(sessions) == len(tokens) == 1
             assert sessions[0].status is SessionStatus.ACTIVE and sessions[0].version == 0
@@ -160,8 +174,9 @@ def test_committed_initial_evidence_and_fl013_compatibility(
 
 
 @pytest.mark.parametrize("stage", ["session", "token", "commit"])
+@pytest.mark.parametrize("fresh", [False, True])
 def test_rollback_removes_both_records(
-    settings: Settings, migrated_database: None, stage: str
+    settings: Settings, migrated_database: None, fresh: bool, stage: str
 ) -> None:
     async def run() -> None:
         async with database_for_test(settings) as database:
@@ -178,7 +193,7 @@ def test_rollback_removes_both_records(
                 assert isinstance(ports.tokens, SqlAlchemyRefreshTokenRepository)
                 if stage == "session":
                     ports = replace(ports, tokens=FailTokens(ports.tokens._session))
-                result = await establish(ports)
+                result = await establish(ports, fresh=fresh)
                 assert await state(database) == (
                     [],
                     [],
@@ -242,8 +257,9 @@ def test_duplicate_identifiers_preserve_existing_rows(
     asyncio.run(run())
 
 
+@pytest.mark.parametrize("fresh", [False, True])
 def test_cancelled_operation_rolls_back_and_closes(
-    settings: Settings, migrated_database: None
+    settings: Settings, migrated_database: None, fresh: bool
 ) -> None:
     async def run() -> None:
         async with database_for_test(settings) as database:
@@ -251,7 +267,7 @@ def test_cancelled_operation_rolls_back_and_closes(
             blocked = asyncio.Event()
 
             async def work(ports: IdentityServices) -> service.ProvisionalSessionEstablishment:
-                result = await establish(ports)
+                result = await establish(ports, fresh=fresh)
                 written.set()
                 await blocked.wait()
                 return result
@@ -267,8 +283,13 @@ def test_cancelled_operation_rolls_back_and_closes(
 
 
 @pytest.mark.parametrize("stage", ["acknowledgment", "close"])
+@pytest.mark.parametrize("fresh", [False, True])
 def test_post_commit_failure_returns_no_result_but_rows_survive(
-    settings: Settings, migrated_database: None, monkeypatch: pytest.MonkeyPatch, stage: str
+    settings: Settings,
+    migrated_database: None,
+    fresh: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
 ) -> None:
     async def run() -> None:
         async with database_for_test(settings) as database:
@@ -289,7 +310,7 @@ def test_post_commit_failure_returns_no_result_but_rows_survive(
                     fail_after_success,
                 )
                 with pytest.raises(DatabaseError) as caught:
-                    await IdentityOperation(database).execute(establish)
+                    await IdentityOperation(database).execute(partial(establish, fresh=fresh))
             assert "Synthetic private" not in str(caught.value)
             assert calls == 1
             sessions, tokens = await state(database)
@@ -416,5 +437,36 @@ def test_generated_material_excluded_from_database_diagnostics(
             finally:
                 instrumentation.close()
                 runtime.shutdown()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("age", [timedelta(minutes=5), timedelta(minutes=6)])
+def test_stale_admission_persists_neither_record(
+    settings: Settings, migrated_database: None, age: timedelta
+) -> None:
+    async def run() -> None:
+        async with database_for_test(settings) as database:
+
+            async def work(ports: IdentityServices) -> service.ProvisionalSessionEstablishment:
+                return await service.establish_fresh_initial_session(
+                    service.TrustedAuthenticationAssertion(USER.id, AT - age),
+                    freshness_policy=service.AuthenticationFreshnessPolicy(timedelta(minutes=5)),
+                    session_id=SESSION_ID,
+                    family_id=FAMILY_ID,
+                    created_at=AT,
+                    session_expires_at=AT + POLICY.max_session_lifetime,
+                    refresh_expires_at=AT + POLICY.max_refresh_lifetime,
+                    lifetime_policy=POLICY,
+                    users=ports.users,
+                    sessions=ports.sessions,
+                    tokens=ports.tokens,
+                )
+
+            with pytest.raises(service.AuthenticationAssertionStale):
+                await IdentityOperation(database).execute(work)
+            assert await state(database) == ([], [])
+            async with database.session() as session, session.begin():
+                assert await SqlAlchemyUserRepository(session).get(USER.id) == USER
 
     asyncio.run(run())

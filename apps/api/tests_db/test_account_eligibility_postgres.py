@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from typing import Literal
 from uuid import UUID
 
@@ -22,10 +23,12 @@ from fleetlink.modules.identity.application.refresh_authentication import (
     RefreshAccountUnavailable,
 )
 from fleetlink.modules.identity.application.session_establishment import (
+    AuthenticationFreshnessPolicy,
     ProvisionalSessionEstablishment,
     SessionAccountUnavailable,
     SessionLifetimePolicy,
     TrustedAuthenticationAssertion,
+    establish_fresh_initial_session,
     establish_initial_session,
 )
 from fleetlink.modules.identity.domain.user import AccountStatus, PlatformRole, User
@@ -44,12 +47,22 @@ AT = datetime(2026, 1, 1, tzinfo=UTC)
 USER = User(UUID(int=1600), AT - timedelta(days=1))
 OTHER = replace(USER, id=UUID(int=1610))
 POLICY = SessionLifetimePolicy(timedelta(hours=2), timedelta(hours=1))
-Mode = Literal["establish", "refresh"]
+Mode = Literal["establish", "fresh", "refresh"]
 Result = ProvisionalSessionEstablishment | ProvisionalRefresh | ProvisionalRefreshReuse
 
 
-async def establish(ports: IdentityServices, user: User = USER) -> ProvisionalSessionEstablishment:
-    return await establish_initial_session(
+async def establish(
+    ports: IdentityServices, user: User = USER, *, fresh: bool = False
+) -> ProvisionalSessionEstablishment:
+    operation = (
+        partial(
+            establish_fresh_initial_session,
+            freshness_policy=AuthenticationFreshnessPolicy(timedelta(minutes=5)),
+        )
+        if fresh
+        else establish_initial_session
+    )
+    return await operation(
         TrustedAuthenticationAssertion(user.id, AT),
         session_id=UUID(int=user.id.int + 1),
         family_id=UUID(int=user.id.int + 2),
@@ -143,14 +156,14 @@ async def initial(database: Database, mode: Mode) -> ProvisionalSessionEstablish
 
 
 async def authenticate(
-    ports: IdentityServices, seed: ProvisionalSessionEstablishment | None
+    ports: IdentityServices, seed: ProvisionalSessionEstablishment | None, mode: Mode
 ) -> Result:
     if seed is None:
-        return await establish(ports)
+        return await establish(ports, fresh=mode == "fresh")
     return await ports.authenticate_refresh(seed.reveal(), at=AT + timedelta(minutes=1))
 
 
-@pytest.mark.parametrize("mode", ["establish", "refresh"])
+@pytest.mark.parametrize("mode", ["establish", "fresh", "refresh"])
 @pytest.mark.parametrize("status", [AccountStatus.SUSPENDED, AccountStatus.DISABLED])
 def test_status_writer_first_refreshes_waiting_eligibility(
     settings: Settings, migrated_database: None, mode: Mode, status: AccountStatus
@@ -174,7 +187,7 @@ def test_status_writer_first_refreshes_waiting_eligibility(
                             assert cached is not None and cached.status == "active"
                             assert await ports.users.get(USER.id) == USER
                             await waiting.put(await pid(session))
-                            return await authenticate(ports, seed)
+                            return await authenticate(ports, seed, mode)
 
                         with pytest.raises((SessionAccountUnavailable, RefreshAccountUnavailable)):
                             await IdentityOperation(database).execute(work)
@@ -193,7 +206,7 @@ def test_status_writer_first_refreshes_waiting_eligibility(
     asyncio.run(asyncio.wait_for(run(), 15))
 
 
-@pytest.mark.parametrize("mode", ["establish", "refresh"])
+@pytest.mark.parametrize("mode", ["establish", "fresh", "refresh"])
 @pytest.mark.parametrize("completion", ["commit", "rollback", "cancel"])
 @pytest.mark.parametrize("status", [AccountStatus.SUSPENDED, AccountStatus.DISABLED])
 def test_authentication_first_holds_until_completion(
@@ -213,7 +226,7 @@ def test_authentication_first_holds_until_completion(
 
             async def authenticate_and_hold() -> None:
                 async def work(ports: IdentityServices) -> Result:
-                    result = await authenticate(ports, seed)
+                    result = await authenticate(ports, seed, mode)
                     await holding.put(await pid(session_for(ports)))
                     await release.wait()
                     if completion == "rollback":
@@ -291,7 +304,7 @@ def test_repository_fresh_snapshot_roles_and_explicit_transaction(
     asyncio.run(asyncio.wait_for(run(), 15))
 
 
-@pytest.mark.parametrize("mode", ["establish", "refresh"])
+@pytest.mark.parametrize("mode", ["establish", "fresh", "refresh"])
 @pytest.mark.parametrize("failure", ["cancel", "timeout"])
 def test_waiting_authentication_cancel_or_lock_timeout_is_atomic(
     settings: Settings, migrated_database: None, mode: Mode, failure: str
@@ -315,7 +328,7 @@ def test_waiting_authentication_cancel_or_lock_timeout_is_atomic(
                                 # Test-only bound, no production setting/default added.
                                 await session.execute(text("SET LOCAL lock_timeout = '1000ms'"))
                             await waiting.put(await pid(session))
-                            return await authenticate(ports, seed)
+                            return await authenticate(ports, seed, mode)
 
                         if failure == "timeout":
                             with pytest.raises(DatabaseError) as caught:
@@ -351,7 +364,7 @@ def test_confirmed_reuse_does_not_wait_for_account_writer(
             seed = await IdentityOperation(database).execute(establish)
 
             async def refresh(ports: IdentityServices) -> Result:
-                return await authenticate(ports, seed)
+                return await authenticate(ports, seed, "refresh")
 
             assert isinstance(
                 await IdentityOperation(database).execute(refresh), ProvisionalRefresh

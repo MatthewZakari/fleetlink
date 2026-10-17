@@ -278,3 +278,21 @@ coordination are unchanged. No public route, schema, dependency, configuration o
 activation is added. FL-017 awaits independent Phase C review; Phase 1 is incomplete and
 ADR-0004/0005/0006 remain Proposed. See [Identity](IDENTITY.md#fl-017-possession-confirmed-session-revocation)
 and [ADR-0006](ADR/0006-possession-confirmed-session-revocation.md).
+
+## FL-018 assertion freshness admission
+
+Identity's application layer adds an explicit positive `AuthenticationFreshnessPolicy` and
+`establish_fresh_initial_session`. It checks aware-instant age at supplied `created_at` before
+I/O and delegates once to FL-015 without duplicating eligibility, generation or persistence.
+The existing entry point, repository ports, transaction runner and lock order are unchanged.
+The result remains provisional until commit and cleanup; failures propagate without retry.
+
+This is opt-in admission-time freshness, not provenance verification, assurance, single-use
+assertions or a commit/delivery-time guarantee. Forged timestamps remain undetected. Future
+public authentication needs separately reviewed, provenance-verified composition. There is
+no hidden clock, runtime setting, production default, schema, dependency or mounted route.
+Rollback removes the additive caller path, retaining evidence and revocations; callers that
+rely on freshness cannot silently fall back. See [Identity contracts](IDENTITY.md#fl-018-opt-in-assertion-freshness)
+and [Proposed ADR-0007](ADR/0007-initial-authentication-freshness.md). Independent Phase C review
+is pending, earlier ADR statuses remain unchanged, Phase 1 remains incomplete and production
+authentication is not enabled.

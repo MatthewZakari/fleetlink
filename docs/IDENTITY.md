@@ -745,3 +745,50 @@ preserving evidence and committed revocations; no database downgrade or reactiva
 ADR-0004/0005/0006 remain Proposed, Phase 1 is incomplete and production readiness is not claimed.
 See [ADR-0006](ADR/0006-possession-confirmed-session-revocation.md),
 [validation](TESTING.md#fl-017-session-revocation-validation) and [database](DATABASE.md#fl-017-session-revocation).
+
+## FL-018 opt-in assertion freshness
+
+FL-018 adds `AuthenticationFreshnessPolicy(max_assertion_age)` and
+`establish_fresh_initial_session`, pending independent Phase C review. The frozen policy
+requires an explicit positive `timedelta`; zero, negative and incorrectly typed values fail
+with fixed errors. There is no runtime setting or production default. The new entry point
+accepts this policy plus all existing FL-015 establishment inputs and requires:
+
+```text
+0 <= created_at - authenticated_at < max_assertion_age
+```
+
+Aware instants normalize to UTC. Zero age and age just below the maximum are admitted;
+exact maximum and older assertions raise fixed `AuthenticationAssertionStale`. Future
+assertions, invalid assertion/policy types and naive admission timestamps raise fixed
+`ValueError`, following existing invalid-chronology conventions. The assertion constructor
+already rejects naive authentication timestamps. Rejections occur before repository access,
+credential generation or mutation. Successful admission delegates exactly once to unchanged
+`establish_initial_session`; it returns the same provisional result without exporting it.
+All original chronology, lifetime and account rules still apply.
+
+Freshness is not provenance: assertion identity and timestamps remain trusted caller data.
+A forged authentication timestamp is not detected, and no assurance level is established.
+Trusted composition supplies policy and `created_at`; never deserialize these from client
+flags or IDs. The existing entry point remains unchanged, so freshness is opt-in, not
+universal enforcement. Future public authentication must use separately reviewed,
+provenance-verified composition. Repeated admission within the window remains possible;
+there is no assertion consumption, session quota or single-use guarantee.
+
+The evaluation instant is the explicitly supplied `created_at`, with no hidden system clock.
+There is no freshness guarantee at lock acquisition, commit or response delivery; lock waits
+do not trigger a new evaluation. The wrapper does not alter FL-016 account -> session -> token
+coordination, FL-013 absolute refresh expiry, FL-017 possession-confirmed session revocation,
+optimistic concurrency or FL-014 ownership. Compose in the same caller transaction; every
+failure escapes without retry. Export only after commit AND cleanup. Lost acknowledgment,
+cancellation during commit and post-commit cleanup/delivery failure can leave durable rows
+without returned credentials; no recovery or database/network atomicity is added.
+
+No HTTP mapping or public route, schema/index/migration, dependency/lockfile, setting,
+provider, JWT, authorization, MFA/recovery, audit or outbox change. No diagnostics are added;
+never serialize/log assertions, credentials, verifiers, snapshots or SQL parameters.
+Alembic remains `0004_refresh_token_rotation`. Rollback removes the additive entry point
+and its callers while preserving evidence and revocations. A caller relying on freshness
+must not silently fall back to legacy establishment. Production authentication is not enabled;
+Phase 1 remains incomplete. ADR-0004/0005/0006 and [ADR-0007](ADR/0007-initial-authentication-freshness.md)
+remain Proposed. See [validation](TESTING.md#fl-018-assertion-freshness-validation).

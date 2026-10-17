@@ -4,7 +4,7 @@ import asyncio
 from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 
 import pytest
@@ -276,3 +276,146 @@ def test_sensitive_representations_and_no_diagnostics(
     ):
         assert bool(sensitive not in diagnostic)
     assert not caplog.records
+
+
+FRESHNESS = service.AuthenticationFreshnessPolicy(timedelta(minutes=5))
+
+
+@pytest.mark.parametrize("age", [timedelta(0), timedelta(minutes=5) - timedelta(microseconds=1)])
+def test_fresh_admission_delegates_once_and_preserves_result(
+    harness: Harness, monkeypatch: pytest.MonkeyPatch, age: timedelta
+) -> None:
+    assertion = replace(ASSERTION, authenticated_at=AT - age)
+    delegate = AsyncMock(wraps=service.establish_initial_session)
+    monkeypatch.setattr(service, "establish_initial_session", delegate)
+    arguments = harness.arguments | {"assertion": assertion}
+    result = asyncio.run(
+        service.establish_fresh_initial_session(**arguments, freshness_policy=FRESHNESS)
+    )
+    delegate.assert_awaited_once_with(**arguments)
+    assert result.session_id == arguments["session_id"]
+    harness.users.get_for_authentication.assert_awaited_once_with(USER.id)
+    harness.sessions.add.assert_awaited_once()
+    harness.tokens.add.assert_awaited_once()
+
+
+@pytest.mark.parametrize("age", [timedelta(minutes=5), timedelta(minutes=6)])
+def test_stale_admission_has_no_effect_or_diagnostics(
+    harness: Harness,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    age: timedelta,
+) -> None:
+    delegate = AsyncMock()
+    generator = Mock()
+    monkeypatch.setattr(service, "establish_initial_session", delegate)
+    monkeypatch.setattr(service, "generate_refresh_credential", generator)
+    with pytest.raises(service.AuthenticationAssertionStale) as caught:
+        asyncio.run(
+            service.establish_fresh_initial_session(
+                **(
+                    harness.arguments | {"assertion": replace(ASSERTION, authenticated_at=AT - age)}
+                ),
+                freshness_policy=FRESHNESS,
+            )
+        )
+    assert str(caught.value) == "Authentication assertion is stale"
+    assert repr(caught.value) == "AuthenticationAssertionStale('Authentication assertion is stale')"
+    delegate.assert_not_called()
+    generator.assert_not_called()
+    for port in (harness.users, harness.sessions, harness.tokens):
+        assert not port.mock_calls
+    assert not caplog.records
+
+
+@pytest.mark.parametrize(
+    "value", [timedelta(0), timedelta(microseconds=-1), None, True, 300, 3.0, "private-invalid"]
+)
+def test_freshness_policy_validation(value: Any) -> None:
+    with pytest.raises(ValueError) as caught:
+        service.AuthenticationFreshnessPolicy(value)
+    assert str(caught.value) == "Maximum assertion age must be a positive timedelta"
+    assert "private-invalid" not in repr(caught.value)
+
+
+def test_freshness_policy_is_explicit_and_immutable() -> None:
+    with pytest.raises(TypeError):
+        service.AuthenticationFreshnessPolicy()  # type: ignore[call-arg]
+    with pytest.raises(FrozenInstanceError):
+        FRESHNESS.max_assertion_age = timedelta(days=1)  # type: ignore[misc]
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"assertion": None},
+        {"assertion": {"user_id": "private-invalid"}},
+        {"assertion": replace(ASSERTION, authenticated_at=AT + timedelta(microseconds=1))},
+        {"created_at": datetime(2026, 1, 1)},
+        {"created_at": "private-invalid"},
+        {"freshness_policy": None},
+        {"freshness_policy": {"max_assertion_age": 300}},
+    ],
+)
+def test_invalid_fresh_admission_never_delegates_or_accesses_ports(
+    harness: Harness, monkeypatch: pytest.MonkeyPatch, changes: dict[str, Any]
+) -> None:
+    delegate = AsyncMock()
+    generator = Mock()
+    monkeypatch.setattr(service, "establish_initial_session", delegate)
+    monkeypatch.setattr(service, "generate_refresh_credential", generator)
+    with pytest.raises(ValueError) as caught:
+        asyncio.run(
+            service.establish_fresh_initial_session(
+                **(harness.arguments | {"freshness_policy": FRESHNESS} | changes)
+            )
+        )
+    assert "private-invalid" not in str(caught.value) + repr(caught.value)
+    delegate.assert_not_called()
+    generator.assert_not_called()
+    for port in (harness.users, harness.sessions, harness.tokens):
+        assert not port.mock_calls
+
+
+def test_fresh_admission_utc_equivalence_and_unchanged_result(
+    harness: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    expected = object()
+    delegate = AsyncMock(return_value=expected)
+    monkeypatch.setattr(service, "establish_initial_session", delegate)
+    offset = timezone(timedelta(hours=-7))
+    assertion = replace(ASSERTION, authenticated_at=AT.astimezone(offset))
+    result = asyncio.run(
+        service.establish_fresh_initial_session(
+            **(harness.arguments | {"assertion": assertion, "created_at": AT.astimezone(offset)}),
+            freshness_policy=FRESHNESS,
+        )
+    )
+    assert result is expected
+    delegate.assert_awaited_once_with(**(harness.arguments | {"assertion": assertion}))
+    assert delegate.call_args.kwargs["created_at"].tzinfo is UTC
+
+
+def test_legacy_establishment_still_accepts_old_assertion(harness: Harness) -> None:
+    result = harness.run(assertion=replace(ASSERTION, authenticated_at=AT - timedelta(hours=1)))
+    assert result.created_at == AT
+    harness.tokens.add.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    "failure", [SessionConflict("Synthetic conflict"), RuntimeError("Synthetic failure")]
+)
+def test_fresh_admission_propagates_delegate_failure_without_retry(
+    harness: Harness, monkeypatch: pytest.MonkeyPatch, failure: Exception
+) -> None:
+    delegate = AsyncMock(side_effect=failure)
+    monkeypatch.setattr(service, "establish_initial_session", delegate)
+    with pytest.raises(type(failure)) as caught:
+        asyncio.run(
+            service.establish_fresh_initial_session(
+                **harness.arguments,
+                freshness_policy=FRESHNESS,
+            )
+        )
+    assert caught.value is failure
+    delegate.assert_awaited_once_with(**harness.arguments)

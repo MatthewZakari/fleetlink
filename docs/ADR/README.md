@@ -39,3 +39,6 @@ Reference the ADR from affected docs and pull requests. A proposed ADR does not 
 
 - [ADR-0006 — Possession-confirmed single-session revocation](0006-possession-confirmed-session-revocation.md)
   (Proposed for FL-017 independent Phase C review).
+
+- [ADR-0007 — Initial authentication assertion freshness](0007-initial-authentication-freshness.md)
+  (Proposed for FL-018 independent Phase C review).

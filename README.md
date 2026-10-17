@@ -30,6 +30,11 @@ independent Phase C review. Historical/expired evidence can terminate only its o
 no account eligibility, rotation, public logout or account-wide control is added. Completion
 requires commit and cleanup; CAS conflicts remain failures without retry. See
 [Proposed ADR-0006](docs/ADR/0006-possession-confirmed-session-revocation.md).
+FL-018 adds opt-in assertion-freshness admission before delegating once to unchanged FL-015,
+pending independent Phase C review. Explicit policy bounds age at caller-supplied `created_at`;
+there is no provenance/assurance verification, forged-timestamp detection or freshness guarantee
+at commit/delivery. Legacy establishment remains unchanged. No public route or production
+authentication is enabled. See [Proposed ADR-0007](docs/ADR/0007-initial-authentication-freshness.md).
 Phase 1 is not complete. See [Identity contracts](docs/IDENTITY.md) and
 [proposed refresh protocol ADR](docs/ADR/0004-refresh-token-protocol.md).
 
