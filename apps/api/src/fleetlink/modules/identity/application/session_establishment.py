@@ -26,7 +26,7 @@ class TrustedAuthenticationAssertion:
 
     Only trusted composition after successful authentication may construct this.
     Never construct it from a client user ID/flag or deserialize a request into it.
-    This module neither authenticates the caller nor verifies assertion freshness.
+    This type neither authenticates the caller nor verifies assertion freshness.
     """
 
     user_id: UUID
@@ -139,4 +139,67 @@ async def establish_initial_session(
         session_expires_at,
         refresh_expires_at,
         ProvisionalRefresh(issued.credential),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class AuthenticationFreshnessPolicy:
+    """Explicit trusted-composition admission limit, with no production default."""
+
+    max_assertion_age: timedelta
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.max_assertion_age, timedelta) or self.max_assertion_age <= timedelta(
+            0
+        ):
+            raise ValueError("Maximum assertion age must be a positive timedelta")
+
+
+class AuthenticationAssertionStale(RuntimeError):
+    """Assertion age meets or exceeds the explicit admission limit; not a public error."""
+
+
+async def establish_fresh_initial_session(
+    assertion: TrustedAuthenticationAssertion,
+    *,
+    freshness_policy: AuthenticationFreshnessPolicy,
+    session_id: UUID,
+    family_id: UUID,
+    created_at: datetime,
+    session_expires_at: datetime,
+    refresh_expires_at: datetime,
+    lifetime_policy: SessionLifetimePolicy,
+    users: UserRepository,
+    sessions: AuthenticationSessionRepository,
+    tokens: RefreshTokenRepository,
+) -> ProvisionalSessionEstablishment:
+    """Opt-in admission at supplied created_at; neither provenance nor assurance.
+
+    Trusted callers supply assertion, policy and time; forged timestamps are not detected.
+    No hidden clock or freshness guarantee at lock acquisition, commit or delivery exists.
+    Delegate once under the SAME caller transaction; propagate failures without retries.
+    Export only after IdentityOperation.execute commits AND completes cleanup.
+    Legacy establish_initial_session remains unchanged and does not enforce this policy.
+    """
+    if not isinstance(assertion, TrustedAuthenticationAssertion):
+        raise ValueError("A trusted authentication assertion is required")
+    if not isinstance(freshness_policy, AuthenticationFreshnessPolicy):
+        raise ValueError("A validated authentication freshness policy is required")
+    created_at = _utc(created_at)
+    age = created_at - assertion.authenticated_at
+    if age < timedelta(0):
+        raise ValueError("Authentication cannot follow admission")
+    if age >= freshness_policy.max_assertion_age:
+        raise AuthenticationAssertionStale("Authentication assertion is stale")
+    return await establish_initial_session(
+        assertion=assertion,
+        session_id=session_id,
+        family_id=family_id,
+        created_at=created_at,
+        session_expires_at=session_expires_at,
+        refresh_expires_at=refresh_expires_at,
+        lifetime_policy=lifetime_policy,
+        users=users,
+        sessions=sessions,
+        tokens=tokens,
     )

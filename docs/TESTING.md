@@ -427,3 +427,35 @@ coverage retains migration round trips/drift and unchanged head `0004_refresh_to
 Check Markdown links, Proposed ADR statuses, scope consistency and absence of public Identity
 routes. Broker/Flutter checks are conditional on component changes. Record actual outcomes;
 these requirements are not claims of execution or production readiness.
+
+## FL-018 assertion freshness validation
+
+Run focused tests with
+`uv run --project apps/api --locked pytest apps/api/tests/test_session_establishment.py`.
+Coverage includes zero age, just below/exact/above maximum, future assertions, invalid policy
+values and types, naive times, UTC equivalence, no-I/O/no-generation rejection, exactly one
+delegation, unchanged legacy acceptance, fixed errors and no automatic retry. Existing inner
+layer import and sensitive-result tests remain required.
+
+The existing `tests_db/test_session_establishment_postgres.py` durability, absolute-expiry,
+rollback, cancellation, deferred commit rejection and post-commit failure tests run for both
+legacy and fresh entry points. Stale admission persists neither row. Existing
+`tests_db/test_account_eligibility_postgres.py` lock-order scenarios also cover fresh admission,
+using real independent transactions and bounded `pg_blocking_pids()` observation, including
+both ordering directions, cancellation and timeout. Reuse fixtures rather than duplicate the
+suite. Injected post-commit failures simulate uncertainty, not real network faults. No
+successful result may escape commit/cleanup failure, even when rows are durable.
+
+Run `make api-test`, `make api-test-secrets`, `make api-test-observability`, `make api-lint`,
+`make api-typecheck`, `make infra-config`, `python3 infrastructure/docker/test_validate.py`,
+`make secret-scan` (Gitleaks 8.30.1), `git diff --check` and `git fsck --full`.
+Run the complete fresh isolated workflow: `make infra-up`, `make api-db-test-setup`,
+`FLEETLINK_POSTGRES_DB=fleetlink_test_fl005 make api-test-db`, `make api-db-test-drop`, then
+`make infra-down`. Use the documented dynamically discovered private host override when
+needed. Never use development databases, concurrent suites, volume deletion or `infra-reset`.
+Verify development preservation and test cleanup. Full migration round trips/drift remain
+required, with unchanged head `0004_refresh_token_rotation`. Check Markdown links, public
+route absence, unchanged dependency/configuration surface and Proposed ADR statuses.
+Broker/Flutter gates are conditional on changes to those components. Record actual results
+and unavailable checks separately. Passing tests does not establish provenance, universal
+freshness, production authentication or Phase 1 completion.
